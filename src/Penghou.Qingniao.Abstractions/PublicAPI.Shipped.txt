@@ -1,0 +1,764 @@
+#nullable enable
+abstract Penghou.Qingniao.SupervisorAction.Kind.get -> string!
+abstract Penghou.Qingniao.SupervisorAction.Validate() -> void
+const Penghou.Qingniao.ArtifactContentIdentity.Sha256BytesV1 = "sha256-bytes-v1" -> string!
+const Penghou.Qingniao.BudgetConsumptionReceipt.MaximumCharges = 32 -> int
+const Penghou.Qingniao.BudgetConsumptionSnapshot.MaximumReceipts = 4096 -> int
+const Penghou.Qingniao.BudgetDefinition.CurrentVersion = "budget-v1" -> string!
+const Penghou.Qingniao.BudgetDefinition.MaximumLimits = 32 -> int
+const Penghou.Qingniao.BudgetQuantity.MaximumValue = 9000000000000000 -> long
+const Penghou.Qingniao.CapabilityDescriptor.MaximumAttributes = 32 -> int
+const Penghou.Qingniao.EvidenceKinds.AgentExecution = "agent.execution" -> string!
+const Penghou.Qingniao.EvidenceKinds.DeterministicExecution = "deterministic.execution" -> string!
+const Penghou.Qingniao.EvidenceKinds.ModelExecution = "model.execution" -> string!
+const Penghou.Qingniao.EvidenceKinds.Review = "review.report" -> string!
+const Penghou.Qingniao.EvidenceKinds.Validation = "validation.report" -> string!
+const Penghou.Qingniao.ExternalOperationProvenanceSnapshot.CurrentSchemaVersion = "v1" -> string!
+const Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.CurrentVersion = "external-start-semantics-v1" -> string!
+const Penghou.Qingniao.ModelProvenanceSnapshot.CurrentSchemaVersion = "v1" -> string!
+const Penghou.Qingniao.ProviderHints.MaximumPreferredModels = 16 -> int
+const Penghou.Qingniao.ProviderHints.MaximumPreferredProviders = 16 -> int
+const Penghou.Qingniao.ToolProvenanceSnapshot.CurrentSchemaVersion = "v1" -> string!
+const Penghou.Qingniao.UsageProvenanceSnapshot.CurrentSchemaVersion = "v1" -> string!
+Penghou.Qingniao.ArtifactContentIdentity
+Penghou.Qingniao.ArtifactContentIdentity.ArtifactContentIdentity() -> void
+Penghou.Qingniao.ArtifactContentIdentity.ArtifactContentIdentity(string! contractVersion, string! hash) -> void
+Penghou.Qingniao.ArtifactContentIdentity.ContractVersion.get -> string!
+Penghou.Qingniao.ArtifactContentIdentity.Hash.get -> string!
+Penghou.Qingniao.ArtifactContentIdentity.Validate() -> void
+Penghou.Qingniao.BudgetAccounting
+Penghou.Qingniao.BudgetCharge
+Penghou.Qingniao.BudgetCharge.Amount.get -> Penghou.Qingniao.BudgetQuantity
+Penghou.Qingniao.BudgetCharge.BudgetCharge(string! dimension, Penghou.Qingniao.BudgetQuantity amount) -> void
+Penghou.Qingniao.BudgetCharge.Dimension.get -> string!
+Penghou.Qingniao.BudgetConsumptionDecision
+Penghou.Qingniao.BudgetConsumptionDecision.Accepted.get -> bool
+Penghou.Qingniao.BudgetConsumptionDecision.BudgetConsumptionDecision(Penghou.Qingniao.BudgetConsumptionSnapshot! Snapshot, Penghou.Qingniao.BudgetExceededOutcome? Exceeded) -> void
+Penghou.Qingniao.BudgetConsumptionDecision.Exceeded.get -> Penghou.Qingniao.BudgetExceededOutcome?
+Penghou.Qingniao.BudgetConsumptionDecision.Exceeded.init -> void
+Penghou.Qingniao.BudgetConsumptionDecision.Snapshot.get -> Penghou.Qingniao.BudgetConsumptionSnapshot!
+Penghou.Qingniao.BudgetConsumptionDecision.Snapshot.init -> void
+Penghou.Qingniao.BudgetConsumptionReceipt
+Penghou.Qingniao.BudgetConsumptionReceipt.BudgetConsumptionReceipt(Penghou.Qingniao.DelegationId delegationId, System.Guid receiptId, string! definitionVersion, long sequence, System.DateTimeOffset recordedAt, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.BudgetCharge!>! charges) -> void
+Penghou.Qingniao.BudgetConsumptionReceipt.Charges.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.BudgetCharge!>!
+Penghou.Qingniao.BudgetConsumptionReceipt.DefinitionVersion.get -> string!
+Penghou.Qingniao.BudgetConsumptionReceipt.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.BudgetConsumptionReceipt.ReceiptId.get -> System.Guid
+Penghou.Qingniao.BudgetConsumptionReceipt.RecordedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.BudgetConsumptionReceipt.Sequence.get -> long
+Penghou.Qingniao.BudgetConsumptionReceipt.Validate() -> void
+Penghou.Qingniao.BudgetConsumptionSnapshot
+Penghou.Qingniao.BudgetConsumptionSnapshot.BudgetConsumptionSnapshot(Penghou.Qingniao.DelegationId delegationId, string! definitionVersion, long lastSequence, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.BudgetCharge!>? charges = null, int receiptCount = 0, System.Collections.Generic.IReadOnlyList<System.Guid>? receiptIds = null) -> void
+Penghou.Qingniao.BudgetConsumptionSnapshot.Charges.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.BudgetCharge!>!
+Penghou.Qingniao.BudgetConsumptionSnapshot.DefinitionVersion.get -> string!
+Penghou.Qingniao.BudgetConsumptionSnapshot.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.BudgetConsumptionSnapshot.LastSequence.get -> long
+Penghou.Qingniao.BudgetConsumptionSnapshot.ReceiptCount.get -> int
+Penghou.Qingniao.BudgetConsumptionSnapshot.ReceiptIds.get -> System.Collections.Generic.IReadOnlyList<System.Guid>!
+Penghou.Qingniao.BudgetConsumptionSnapshot.Validate() -> void
+Penghou.Qingniao.BudgetDefinition
+Penghou.Qingniao.BudgetDefinition.BudgetDefinition(string! version, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.BudgetLimit!>! limits) -> void
+Penghou.Qingniao.BudgetDefinition.Limits.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.BudgetLimit!>!
+Penghou.Qingniao.BudgetDefinition.TryGetLimit(string! dimension, out Penghou.Qingniao.BudgetLimit? limit) -> bool
+Penghou.Qingniao.BudgetDefinition.Validate() -> void
+Penghou.Qingniao.BudgetDefinition.Version.get -> string!
+Penghou.Qingniao.BudgetExceededOutcome
+Penghou.Qingniao.BudgetExceededOutcome.BudgetExceededOutcome(Penghou.Qingniao.DelegationId delegationId, string! definitionVersion, Penghou.Qingniao.BudgetCharge! charge, Penghou.Qingniao.BudgetQuantity limit, Penghou.Qingniao.BudgetQuantity consumed, System.Guid triggeringReceiptId, string! reason, System.DateTimeOffset recordedAt) -> void
+Penghou.Qingniao.BudgetExceededOutcome.Charge.get -> Penghou.Qingniao.BudgetCharge!
+Penghou.Qingniao.BudgetExceededOutcome.Consumed.get -> Penghou.Qingniao.BudgetQuantity
+Penghou.Qingniao.BudgetExceededOutcome.DefinitionVersion.get -> string!
+Penghou.Qingniao.BudgetExceededOutcome.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.BudgetExceededOutcome.Limit.get -> Penghou.Qingniao.BudgetQuantity
+Penghou.Qingniao.BudgetExceededOutcome.Reason.get -> string!
+Penghou.Qingniao.BudgetExceededOutcome.RecordedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.BudgetExceededOutcome.TriggeringReceiptId.get -> System.Guid
+Penghou.Qingniao.BudgetLimit
+Penghou.Qingniao.BudgetLimit.BudgetLimit(string! dimension, Penghou.Qingniao.BudgetQuantity maximum) -> void
+Penghou.Qingniao.BudgetLimit.Dimension.get -> string!
+Penghou.Qingniao.BudgetLimit.Maximum.get -> Penghou.Qingniao.BudgetQuantity
+Penghou.Qingniao.BudgetQuantity
+Penghou.Qingniao.BudgetQuantity.BudgetQuantity() -> void
+Penghou.Qingniao.BudgetQuantity.BudgetQuantity(Penghou.Qingniao.BudgetQuantityKind kind, long value, string? currency = null) -> void
+Penghou.Qingniao.BudgetQuantity.Currency.get -> string?
+Penghou.Qingniao.BudgetQuantity.Kind.get -> Penghou.Qingniao.BudgetQuantityKind
+Penghou.Qingniao.BudgetQuantity.Validate() -> void
+Penghou.Qingniao.BudgetQuantity.Value.get -> long
+Penghou.Qingniao.BudgetQuantityKind
+Penghou.Qingniao.BudgetQuantityKind.Count = 0 -> Penghou.Qingniao.BudgetQuantityKind
+Penghou.Qingniao.BudgetQuantityKind.MicroCredits = 3 -> Penghou.Qingniao.BudgetQuantityKind
+Penghou.Qingniao.BudgetQuantityKind.Milliseconds = 1 -> Penghou.Qingniao.BudgetQuantityKind
+Penghou.Qingniao.BudgetQuantityKind.MinorCurrencyUnits = 4 -> Penghou.Qingniao.BudgetQuantityKind
+Penghou.Qingniao.BudgetQuantityKind.TimeSpanTicks = 5 -> Penghou.Qingniao.BudgetQuantityKind
+Penghou.Qingniao.BudgetQuantityKind.Tokens = 2 -> Penghou.Qingniao.BudgetQuantityKind
+Penghou.Qingniao.CandidateId
+Penghou.Qingniao.CandidateId.CandidateId() -> void
+Penghou.Qingniao.CandidateId.CandidateId(System.Guid value) -> void
+Penghou.Qingniao.CandidateId.Validate() -> void
+Penghou.Qingniao.CandidateId.Value.get -> System.Guid
+Penghou.Qingniao.CandidateRevisionConflictException
+Penghou.Qingniao.CandidateRevisionConflictException.CandidateRevisionConflictException(string! message) -> void
+Penghou.Qingniao.CandidateRevisionIdentity
+Penghou.Qingniao.CandidateRevisionPublication
+Penghou.Qingniao.CandidateRevisionPublication.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.CandidateRevisionPublication.Candidate.init -> void
+Penghou.Qingniao.CandidateRevisionPublication.CandidateRevisionPublication(Penghou.Qingniao.CandidateRevisionReference! Candidate, bool IsNew) -> void
+Penghou.Qingniao.CandidateRevisionPublication.IsNew.get -> bool
+Penghou.Qingniao.CandidateRevisionPublication.IsNew.init -> void
+Penghou.Qingniao.CandidateRevisionReference
+Penghou.Qingniao.CandidateRevisionReference.Artifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.CandidateRevisionReference.CandidateId.get -> Penghou.Qingniao.CandidateId
+Penghou.Qingniao.CandidateRevisionReference.CandidateRevisionReference(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.StructuralNodeReference structuralNode, Penghou.Qingniao.NodeGenerationId nodeGeneration, Penghou.Qingniao.CandidateId candidateId, int revision, Penghou.Qingniao.ArtifactContentIdentity contentIdentity, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! artifacts, Penghou.Qingniao.EvidenceBundle? evidence = null) -> void
+Penghou.Qingniao.CandidateRevisionReference.ContentIdentity.get -> Penghou.Qingniao.ArtifactContentIdentity
+Penghou.Qingniao.CandidateRevisionReference.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.CandidateRevisionReference.Evidence.get -> Penghou.Qingniao.EvidenceBundle?
+Penghou.Qingniao.CandidateRevisionReference.NodeGeneration.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.CandidateRevisionReference.Revision.get -> int
+Penghou.Qingniao.CandidateRevisionReference.StructuralNode.get -> Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.CapabilityDescriptor
+Penghou.Qingniao.CapabilityDescriptor.Attributes.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Penghou.Qingniao.CapabilityDescriptor.CapabilityDescriptor(string! name, int version, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? attributes = null) -> void
+Penghou.Qingniao.CapabilityDescriptor.Name.get -> string!
+Penghou.Qingniao.CapabilityDescriptor.Version.get -> int
+Penghou.Qingniao.CapabilityRequirement
+Penghou.Qingniao.CapabilityRequirement.Attributes.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Penghou.Qingniao.CapabilityRequirement.CapabilityRequirement(string! name, int minimumVersion, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? attributes = null) -> void
+Penghou.Qingniao.CapabilityRequirement.MinimumVersion.get -> int
+Penghou.Qingniao.CapabilityRequirement.Name.get -> string!
+Penghou.Qingniao.ContextCorrelationReference
+Penghou.Qingniao.ContextCorrelationReference.ContextCorrelationReference(string! provider, string! kind, string! identifier, string? revision = null) -> void
+Penghou.Qingniao.ContextCorrelationReference.Identifier.get -> string!
+Penghou.Qingniao.ContextCorrelationReference.Kind.get -> string!
+Penghou.Qingniao.ContextCorrelationReference.Provider.get -> string!
+Penghou.Qingniao.ContextCorrelationReference.Revision.get -> string?
+Penghou.Qingniao.ContextFacetAvailability
+Penghou.Qingniao.ContextFacetAvailability.Included = 0 -> Penghou.Qingniao.ContextFacetAvailability
+Penghou.Qingniao.ContextFacetAvailability.Omitted = 2 -> Penghou.Qingniao.ContextFacetAvailability
+Penghou.Qingniao.ContextFacetAvailability.Truncated = 1 -> Penghou.Qingniao.ContextFacetAvailability
+Penghou.Qingniao.ContextFacetOutcome
+Penghou.Qingniao.ContextFacetOutcome.Availability.get -> Penghou.Qingniao.ContextFacetAvailability
+Penghou.Qingniao.ContextFacetOutcome.ContextFacetOutcome(Penghou.Qingniao.SupervisorContextFacet facet, Penghou.Qingniao.ContextFacetAvailability availability, int itemCount, string? reason = null) -> void
+Penghou.Qingniao.ContextFacetOutcome.Facet.get -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.ContextFacetOutcome.ItemCount.get -> int
+Penghou.Qingniao.ContextFacetOutcome.Reason.get -> string?
+Penghou.Qingniao.ContextProvenanceReference
+Penghou.Qingniao.ContextProvenanceReference.ContentHash.get -> string?
+Penghou.Qingniao.ContextProvenanceReference.ContextProvenanceReference(string! provider, string! kind, string! identifier, string? revision = null, string? contentHash = null) -> void
+Penghou.Qingniao.ContextProvenanceReference.Identifier.get -> string!
+Penghou.Qingniao.ContextProvenanceReference.Kind.get -> string!
+Penghou.Qingniao.ContextProvenanceReference.Provider.get -> string!
+Penghou.Qingniao.ContextProvenanceReference.Revision.get -> string?
+Penghou.Qingniao.DelegationArtifactReference
+Penghou.Qingniao.DelegationArtifactReference.ArtifactId.get -> string!
+Penghou.Qingniao.DelegationArtifactReference.ContentIdentity.get -> Penghou.Qingniao.ArtifactContentIdentity
+Penghou.Qingniao.DelegationArtifactReference.DelegationArtifactReference(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.StructuralNodeReference structuralNode, Penghou.Qingniao.NodeGenerationId nodeGeneration, string! provider, string! repository, string! artifactId, string! kind, int schemaVersion, string! location, Penghou.Qingniao.ArtifactContentIdentity contentIdentity) -> void
+Penghou.Qingniao.DelegationArtifactReference.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.DelegationArtifactReference.Kind.get -> string!
+Penghou.Qingniao.DelegationArtifactReference.Location.get -> string!
+Penghou.Qingniao.DelegationArtifactReference.NodeGeneration.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.DelegationArtifactReference.Provider.get -> string!
+Penghou.Qingniao.DelegationArtifactReference.Repository.get -> string!
+Penghou.Qingniao.DelegationArtifactReference.SchemaVersion.get -> int
+Penghou.Qingniao.DelegationArtifactReference.StructuralNode.get -> Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.DelegationBudget
+Penghou.Qingniao.DelegationBudget.DelegationBudget(int MaximumWorkerCalls = 8, int MaximumRetries = 1, System.TimeSpan? MaximumDuration = null, int MaximumParallelWorkers = 2) -> void
+Penghou.Qingniao.DelegationBudget.MaximumDuration.get -> System.TimeSpan?
+Penghou.Qingniao.DelegationBudget.MaximumDuration.init -> void
+Penghou.Qingniao.DelegationBudget.MaximumParallelWorkers.get -> int
+Penghou.Qingniao.DelegationBudget.MaximumParallelWorkers.init -> void
+Penghou.Qingniao.DelegationBudget.MaximumRetries.get -> int
+Penghou.Qingniao.DelegationBudget.MaximumRetries.init -> void
+Penghou.Qingniao.DelegationBudget.MaximumWorkerCalls.get -> int
+Penghou.Qingniao.DelegationBudget.MaximumWorkerCalls.init -> void
+Penghou.Qingniao.DelegationBudget.Validate() -> void
+Penghou.Qingniao.DelegationCallerScope
+Penghou.Qingniao.DelegationCallerScope.DelegationCallerScope(string! identifier) -> void
+Penghou.Qingniao.DelegationCallerScope.Identifier.get -> string!
+Penghou.Qingniao.DelegationEvidence
+Penghou.Qingniao.DelegationEvidence.ChangedFiles.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.DelegationEvidence.Commands.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.DelegationEvidence.DelegationEvidence(System.Collections.Generic.IReadOnlyList<string!>! changedFiles, System.Collections.Generic.IReadOnlyList<string!>! commands, int testsPassed, int testsFailed, bool? reviewApproved, int reviewFindingsResolved) -> void
+Penghou.Qingniao.DelegationEvidence.ReviewApproved.get -> bool?
+Penghou.Qingniao.DelegationEvidence.ReviewFindingsResolved.get -> int
+Penghou.Qingniao.DelegationEvidence.TestsFailed.get -> int
+Penghou.Qingniao.DelegationEvidence.TestsPassed.get -> int
+Penghou.Qingniao.DelegationHandle
+Penghou.Qingniao.DelegationHandle.DelegationHandle(Penghou.Qingniao.DelegationId DelegationId, Penghou.Qingniao.WorkflowReference! Workflow, Penghou.Qingniao.DelegationState State) -> void
+Penghou.Qingniao.DelegationHandle.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.DelegationHandle.DelegationId.init -> void
+Penghou.Qingniao.DelegationHandle.State.get -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationHandle.State.init -> void
+Penghou.Qingniao.DelegationHandle.Workflow.get -> Penghou.Qingniao.WorkflowReference!
+Penghou.Qingniao.DelegationHandle.Workflow.init -> void
+Penghou.Qingniao.DelegationId
+Penghou.Qingniao.DelegationId.DelegationId() -> void
+Penghou.Qingniao.DelegationId.DelegationId(System.Guid Value) -> void
+Penghou.Qingniao.DelegationId.Value.get -> System.Guid
+Penghou.Qingniao.DelegationId.Value.init -> void
+Penghou.Qingniao.DelegationProgress
+Penghou.Qingniao.DelegationProgress.Checkpoint.get -> Penghou.Qingniao.SupervisorCheckpointDescriptor?
+Penghou.Qingniao.DelegationProgress.CompletedSteps.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.DelegationProgress.CurrentSteps.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.DelegationProgress.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.DelegationProgress.DelegationProgress(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.DelegationState state, long revision, System.Collections.Generic.IReadOnlyList<string!>! currentSteps, System.Collections.Generic.IReadOnlyList<string!>! completedSteps, int workerCalls, int retries, System.DateTimeOffset updatedAt, Penghou.Qingniao.SupervisorCheckpointDescriptor? checkpoint = null) -> void
+Penghou.Qingniao.DelegationProgress.Retries.get -> int
+Penghou.Qingniao.DelegationProgress.Revision.get -> long
+Penghou.Qingniao.DelegationProgress.State.get -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationProgress.UpdatedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.DelegationProgress.WorkerCalls.get -> int
+Penghou.Qingniao.DelegationRequest
+Penghou.Qingniao.DelegationRequest.AcceptanceCriteria.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.DelegationRequest.Budget.get -> Penghou.Qingniao.DelegationBudget!
+Penghou.Qingniao.DelegationRequest.Constraints.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.DelegationRequest.DelegationRequest(string! requestKey, string! objective, Penghou.Qingniao.WorkspaceReference! workspace, System.Collections.Generic.IReadOnlyList<string!>! acceptanceCriteria, System.Collections.Generic.IReadOnlyList<string!>! constraints, Penghou.Qingniao.DelegationBudget! budget, Penghou.Qingniao.DelegationStrategy strategy = Penghou.Qingniao.DelegationStrategy.Implement, Penghou.Qingniao.WorkflowPlanRevisionReference? planRevision = null) -> void
+Penghou.Qingniao.DelegationRequest.Objective.get -> string!
+Penghou.Qingniao.DelegationRequest.PlanRevision.get -> Penghou.Qingniao.WorkflowPlanRevisionReference?
+Penghou.Qingniao.DelegationRequest.RequestKey.get -> string!
+Penghou.Qingniao.DelegationRequest.Strategy.get -> Penghou.Qingniao.DelegationStrategy
+Penghou.Qingniao.DelegationRequest.Workspace.get -> Penghou.Qingniao.WorkspaceReference!
+Penghou.Qingniao.DelegationResult
+Penghou.Qingniao.DelegationResult.Artifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.DelegationResult.BudgetExceeded.get -> Penghou.Qingniao.BudgetExceededOutcome?
+Penghou.Qingniao.DelegationResult.CompletedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.DelegationResult.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.DelegationResult.DelegationResult(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.DelegationState state, string! summary, Penghou.Qingniao.DelegationEvidence! evidence, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! artifacts, System.Collections.Generic.IReadOnlyList<string!>! unresolvedConcerns, System.DateTimeOffset completedAt, Penghou.Qingniao.EvidenceBundle? normalizedEvidence = null, Penghou.Qingniao.BudgetExceededOutcome? budgetExceeded = null) -> void
+Penghou.Qingniao.DelegationResult.Evidence.get -> Penghou.Qingniao.DelegationEvidence!
+Penghou.Qingniao.DelegationResult.NormalizedEvidence.get -> Penghou.Qingniao.EvidenceBundle?
+Penghou.Qingniao.DelegationResult.State.get -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationResult.Summary.get -> string!
+Penghou.Qingniao.DelegationResult.UnresolvedConcerns.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.DelegationResultId
+Penghou.Qingniao.DelegationResultId.DelegationResultId() -> void
+Penghou.Qingniao.DelegationResultId.DelegationResultId(System.Guid value) -> void
+Penghou.Qingniao.DelegationResultId.Validate() -> void
+Penghou.Qingniao.DelegationResultId.Value.get -> System.Guid
+Penghou.Qingniao.DelegationResultReference
+Penghou.Qingniao.DelegationResultReference.Artifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.DelegationResultReference.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.DelegationResultReference.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.DelegationResultReference.DelegationResultReference(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.DelegationResultId resultId, Penghou.Qingniao.CandidateRevisionReference! candidate, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! artifacts, Penghou.Qingniao.EvidenceBundle? evidence = null) -> void
+Penghou.Qingniao.DelegationResultReference.Evidence.get -> Penghou.Qingniao.EvidenceBundle?
+Penghou.Qingniao.DelegationResultReference.ResultId.get -> Penghou.Qingniao.DelegationResultId
+Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationState.BudgetExceeded = 5 -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationState.Cancelled = 4 -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationState.Completed = 2 -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationState.Failed = 3 -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationState.NeedsSupervisor = 6 -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationState.Queued = 0 -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationState.Running = 1 -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationState.WaitingForSupervisor = 7 -> Penghou.Qingniao.DelegationState
+Penghou.Qingniao.DelegationStrategy
+Penghou.Qingniao.DelegationStrategy.Fix = 3 -> Penghou.Qingniao.DelegationStrategy
+Penghou.Qingniao.DelegationStrategy.Implement = 0 -> Penghou.Qingniao.DelegationStrategy
+Penghou.Qingniao.DelegationStrategy.Investigate = 1 -> Penghou.Qingniao.DelegationStrategy
+Penghou.Qingniao.DelegationStrategy.Review = 2 -> Penghou.Qingniao.DelegationStrategy
+Penghou.Qingniao.EvidenceBundle
+Penghou.Qingniao.EvidenceBundle.EvidenceBundle(System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.WorkerInvocationEvidence!>? invocations = null, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ValidationEvidence!>? validations = null, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ReviewEvidence!>? reviews = null) -> void
+Penghou.Qingniao.EvidenceBundle.Invocations.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.WorkerInvocationEvidence!>!
+Penghou.Qingniao.EvidenceBundle.Reviews.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ReviewEvidence!>!
+Penghou.Qingniao.EvidenceBundle.Validations.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ValidationEvidence!>!
+Penghou.Qingniao.EvidenceBundleIdentity
+Penghou.Qingniao.EvidenceFinding
+Penghou.Qingniao.EvidenceFinding.Code.get -> string!
+Penghou.Qingniao.EvidenceFinding.Details.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Penghou.Qingniao.EvidenceFinding.EvidenceFinding(string! code, string! severity, string! summary, bool resolved, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? details = null) -> void
+Penghou.Qingniao.EvidenceFinding.Resolved.get -> bool
+Penghou.Qingniao.EvidenceFinding.Severity.get -> string!
+Penghou.Qingniao.EvidenceFinding.Summary.get -> string!
+Penghou.Qingniao.EvidenceKinds
+Penghou.Qingniao.ExecutionIdentityRules
+Penghou.Qingniao.ExecutorProfileReference
+Penghou.Qingniao.ExecutorProfileReference.ExecutorProfileReference(string! provider, string! profile) -> void
+Penghou.Qingniao.ExecutorProfileReference.Profile.get -> string!
+Penghou.Qingniao.ExecutorProfileReference.Provider.get -> string!
+Penghou.Qingniao.ExecutorProfileReference.Validate() -> void
+Penghou.Qingniao.ExternalAgentReference
+Penghou.Qingniao.ExternalAgentReference.ExternalAgentReference(string! provider, string! identifier, string! protocolVersion) -> void
+Penghou.Qingniao.ExternalAgentReference.Identifier.get -> string!
+Penghou.Qingniao.ExternalAgentReference.ProtocolVersion.get -> string!
+Penghou.Qingniao.ExternalAgentReference.Provider.get -> string!
+Penghou.Qingniao.ExternalAgentReference.Validate() -> void
+Penghou.Qingniao.ExternalOperationBudgetHint
+Penghou.Qingniao.ExternalOperationBudgetHint.ExternalOperationBudgetHint(int? maximumTokens = null, System.TimeSpan? maximumDuration = null) -> void
+Penghou.Qingniao.ExternalOperationBudgetHint.MaximumDuration.get -> System.TimeSpan?
+Penghou.Qingniao.ExternalOperationBudgetHint.MaximumTokens.get -> int?
+Penghou.Qingniao.ExternalOperationCancellationDisposition
+Penghou.Qingniao.ExternalOperationCancellationDisposition.AlreadyTerminal = 2 -> Penghou.Qingniao.ExternalOperationCancellationDisposition
+Penghou.Qingniao.ExternalOperationCancellationDisposition.ConfirmedCancelled = 1 -> Penghou.Qingniao.ExternalOperationCancellationDisposition
+Penghou.Qingniao.ExternalOperationCancellationDisposition.Rejected = 3 -> Penghou.Qingniao.ExternalOperationCancellationDisposition
+Penghou.Qingniao.ExternalOperationCancellationDisposition.Requested = 0 -> Penghou.Qingniao.ExternalOperationCancellationDisposition
+Penghou.Qingniao.ExternalOperationCancellationDisposition.Unknown = 4 -> Penghou.Qingniao.ExternalOperationCancellationDisposition
+Penghou.Qingniao.ExternalOperationCancellationReceipt
+Penghou.Qingniao.ExternalOperationCancellationReceipt.CancellationKey.get -> string!
+Penghou.Qingniao.ExternalOperationCancellationReceipt.Disposition.get -> Penghou.Qingniao.ExternalOperationCancellationDisposition
+Penghou.Qingniao.ExternalOperationCancellationReceipt.ExternalOperationCancellationReceipt(Penghou.Qingniao.ExternalOperationHandle! handle, string! cancellationKey, Penghou.Qingniao.ExternalOperationCancellationDisposition disposition, Penghou.Qingniao.ExternalOperationState state, System.DateTimeOffset recordedAt, Penghou.Qingniao.ExternalOperationFailure? failure = null) -> void
+Penghou.Qingniao.ExternalOperationCancellationReceipt.Failure.get -> Penghou.Qingniao.ExternalOperationFailure?
+Penghou.Qingniao.ExternalOperationCancellationReceipt.Handle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationCancellationReceipt.RecordedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.ExternalOperationCancellationReceipt.State.get -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationCancelRequest
+Penghou.Qingniao.ExternalOperationCancelRequest.CancellationKey.get -> string!
+Penghou.Qingniao.ExternalOperationCancelRequest.ExternalOperationCancelRequest(Penghou.Qingniao.ExternalOperationHandle! handle, string! cancellationKey, string! reason) -> void
+Penghou.Qingniao.ExternalOperationCancelRequest.Handle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationCancelRequest.Reason.get -> string!
+Penghou.Qingniao.ExternalOperationCorrelation
+Penghou.Qingniao.ExternalOperationCorrelation.Agent.get -> Penghou.Qingniao.ExternalAgentReference!
+Penghou.Qingniao.ExternalOperationCorrelation.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.ExternalOperationCorrelation.EnsureTaskCaptured() -> void
+Penghou.Qingniao.ExternalOperationCorrelation.ExecutionAttemptId.get -> string!
+Penghou.Qingniao.ExternalOperationCorrelation.ExternalOperationCorrelation(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.WorkflowRunExecutionReference! workflowRun, Penghou.Qingniao.StructuralNodeReference structuralNode, Penghou.Qingniao.NodeGenerationId nodeGeneration, string! executionAttemptId, Penghou.Qingniao.ExternalAgentReference! agent, Penghou.Qingniao.ExternalTaskReference? task = null) -> void
+Penghou.Qingniao.ExternalOperationCorrelation.NodeGeneration.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.ExternalOperationCorrelation.StructuralNode.get -> Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.ExternalOperationCorrelation.Task.get -> Penghou.Qingniao.ExternalTaskReference?
+Penghou.Qingniao.ExternalOperationCorrelation.Validate() -> void
+Penghou.Qingniao.ExternalOperationCorrelation.WorkflowRun.get -> Penghou.Qingniao.WorkflowRunExecutionReference!
+Penghou.Qingniao.ExternalOperationFailure
+Penghou.Qingniao.ExternalOperationFailure.Code.get -> string!
+Penghou.Qingniao.ExternalOperationFailure.ExternalOperationFailure(Penghou.Qingniao.ExternalOperationFailureKind kind, string! code, string! summary, bool retryable, string? providerCode = null) -> void
+Penghou.Qingniao.ExternalOperationFailure.Kind.get -> Penghou.Qingniao.ExternalOperationFailureKind
+Penghou.Qingniao.ExternalOperationFailure.ProviderCode.get -> string?
+Penghou.Qingniao.ExternalOperationFailure.Retryable.get -> bool
+Penghou.Qingniao.ExternalOperationFailure.Summary.get -> string!
+Penghou.Qingniao.ExternalOperationFailureKind
+Penghou.Qingniao.ExternalOperationFailureKind.Cancellation = 2 -> Penghou.Qingniao.ExternalOperationFailureKind
+Penghou.Qingniao.ExternalOperationFailureKind.Rejection = 4 -> Penghou.Qingniao.ExternalOperationFailureKind
+Penghou.Qingniao.ExternalOperationFailureKind.Remote = 1 -> Penghou.Qingniao.ExternalOperationFailureKind
+Penghou.Qingniao.ExternalOperationFailureKind.ResultValidation = 5 -> Penghou.Qingniao.ExternalOperationFailureKind
+Penghou.Qingniao.ExternalOperationFailureKind.Timeout = 3 -> Penghou.Qingniao.ExternalOperationFailureKind
+Penghou.Qingniao.ExternalOperationFailureKind.Transport = 0 -> Penghou.Qingniao.ExternalOperationFailureKind
+Penghou.Qingniao.ExternalOperationHandle
+Penghou.Qingniao.ExternalOperationHandle.Correlation.get -> Penghou.Qingniao.ExternalOperationCorrelation!
+Penghou.Qingniao.ExternalOperationHandle.ExternalOperationHandle(string! provider, string! value, string! protocolVersion, Penghou.Qingniao.ExternalOperationCorrelation! correlation) -> void
+Penghou.Qingniao.ExternalOperationHandle.ProtocolVersion.get -> string!
+Penghou.Qingniao.ExternalOperationHandle.Provider.get -> string!
+Penghou.Qingniao.ExternalOperationHandle.ToProviderAttemptReference() -> Penghou.Qingniao.ProviderExecutionAttemptReference!
+Penghou.Qingniao.ExternalOperationHandle.Validate() -> void
+Penghou.Qingniao.ExternalOperationHandle.Value.get -> string!
+Penghou.Qingniao.ExternalOperationHandleCapture
+Penghou.Qingniao.ExternalOperationHandleCapture.CapturedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.ExternalOperationHandleCapture.ExternalOperationHandleCapture(Penghou.Qingniao.ExternalOperationHandle! handle, System.DateTimeOffset capturedAt) -> void
+Penghou.Qingniao.ExternalOperationHandleCapture.Handle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationObservation
+Penghou.Qingniao.ExternalOperationObservation.ExternalOperationObservation(Penghou.Qingniao.ExternalOperationHandle! handle, long revision, Penghou.Qingniao.ExternalOperationState state, System.DateTimeOffset observedAt, string? providerStatus = null, Penghou.Qingniao.ExternalOperationFailure? failure = null, bool resultAvailable = false) -> void
+Penghou.Qingniao.ExternalOperationObservation.Failure.get -> Penghou.Qingniao.ExternalOperationFailure?
+Penghou.Qingniao.ExternalOperationObservation.Handle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationObservation.ObservedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.ExternalOperationObservation.ProviderStatus.get -> string?
+Penghou.Qingniao.ExternalOperationObservation.ResultAvailable.get -> bool
+Penghou.Qingniao.ExternalOperationObservation.Revision.get -> long
+Penghou.Qingniao.ExternalOperationObservation.State.get -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationObservationRules
+Penghou.Qingniao.ExternalOperationProvenanceSnapshot
+Penghou.Qingniao.ExternalOperationProvenanceSnapshot.ExternalOperationProvenanceSnapshot(Penghou.Qingniao.ModelProvenanceSnapshot? model, Penghou.Qingniao.ToolProvenanceSnapshot! tools, Penghou.Qingniao.UsageProvenanceSnapshot! usage, string! schemaVersion = "v1") -> void
+Penghou.Qingniao.ExternalOperationProvenanceSnapshot.Model.get -> Penghou.Qingniao.ModelProvenanceSnapshot?
+Penghou.Qingniao.ExternalOperationProvenanceSnapshot.SchemaVersion.get -> string!
+Penghou.Qingniao.ExternalOperationProvenanceSnapshot.Tools.get -> Penghou.Qingniao.ToolProvenanceSnapshot!
+Penghou.Qingniao.ExternalOperationProvenanceSnapshot.Usage.get -> Penghou.Qingniao.UsageProvenanceSnapshot!
+Penghou.Qingniao.ExternalOperationResult
+Penghou.Qingniao.ExternalOperationResult.Artifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.ExternalOperationResult.CompletedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.ExternalOperationResult.ExternalOperationResult(Penghou.Qingniao.ExternalOperationHandle! handle, Penghou.Qingniao.ExternalOperationState state, System.DateTimeOffset completedAt, string! summary, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! artifacts, Penghou.Qingniao.ExternalOperationProvenanceSnapshot? provenance = null, Penghou.Qingniao.ExternalOperationFailure? failure = null) -> void
+Penghou.Qingniao.ExternalOperationResult.Failure.get -> Penghou.Qingniao.ExternalOperationFailure?
+Penghou.Qingniao.ExternalOperationResult.Handle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationResult.Provenance.get -> Penghou.Qingniao.ExternalOperationProvenanceSnapshot?
+Penghou.Qingniao.ExternalOperationResult.State.get -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationResult.Summary.get -> string!
+Penghou.Qingniao.ExternalOperationResumeReceipt
+Penghou.Qingniao.ExternalOperationResumeReceipt.AcceptedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.ExternalOperationResumeReceipt.Disposition.get -> Penghou.Qingniao.ExternalOperationStartDisposition
+Penghou.Qingniao.ExternalOperationResumeReceipt.ExternalOperationResumeReceipt(Penghou.Qingniao.ExternalOperationHandle! previousHandle, string! resumeKey, Penghou.Qingniao.ExternalOperationHandle! handle, Penghou.Qingniao.ExternalOperationStartDisposition disposition, Penghou.Qingniao.ExternalOperationState state, System.DateTimeOffset acceptedAt) -> void
+Penghou.Qingniao.ExternalOperationResumeReceipt.Handle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationResumeReceipt.PreviousHandle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationResumeReceipt.ResumeKey.get -> string!
+Penghou.Qingniao.ExternalOperationResumeReceipt.State.get -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationResumeRequest
+Penghou.Qingniao.ExternalOperationResumeRequest.CorrectionArtifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.ExternalOperationResumeRequest.ExternalOperationResumeRequest(Penghou.Qingniao.ExternalOperationHandle! handle, string! resumeKey, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>? correctionArtifacts = null, string? reason = null) -> void
+Penghou.Qingniao.ExternalOperationResumeRequest.Handle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationResumeRequest.Reason.get -> string?
+Penghou.Qingniao.ExternalOperationResumeRequest.ResumeKey.get -> string!
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.Agent.get -> Penghou.Qingniao.ExternalAgentReference!
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.Budget.get -> Penghou.Qingniao.ExternalOperationBudgetHint?
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.Capability.get -> string!
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.Deadline.get -> System.DateTimeOffset?
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.ExternalOperationSemanticInputEnvelope(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.ExternalAgentReference! agent, string! capability, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! inputArtifacts, Penghou.Qingniao.ExternalOperationBudgetHint? budget, System.DateTimeOffset? deadline) -> void
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.InputArtifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.ExternalOperationSemanticInputEnvelope.SchemaVersion.get -> string!
+Penghou.Qingniao.ExternalOperationStartDisposition
+Penghou.Qingniao.ExternalOperationStartDisposition.Created = 0 -> Penghou.Qingniao.ExternalOperationStartDisposition
+Penghou.Qingniao.ExternalOperationStartDisposition.Existing = 1 -> Penghou.Qingniao.ExternalOperationStartDisposition
+Penghou.Qingniao.ExternalOperationStartIdentity
+Penghou.Qingniao.ExternalOperationStartIdentity.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.ExternalOperationStartIdentity.ExecutionAttemptId.get -> string!
+Penghou.Qingniao.ExternalOperationStartIdentity.ExternalOperationStartIdentity(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.WorkflowRunExecutionReference! workflowRun, Penghou.Qingniao.StructuralNodeReference structuralNode, Penghou.Qingniao.NodeGenerationId nodeGeneration, string! executionAttemptId, string! idempotencyKey, string! semanticFingerprint) -> void
+Penghou.Qingniao.ExternalOperationStartIdentity.IdempotencyKey.get -> string!
+Penghou.Qingniao.ExternalOperationStartIdentity.NodeGeneration.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.ExternalOperationStartIdentity.SemanticFingerprint.get -> string!
+Penghou.Qingniao.ExternalOperationStartIdentity.StructuralNode.get -> Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.ExternalOperationStartIdentity.Validate() -> void
+Penghou.Qingniao.ExternalOperationStartIdentity.WorkflowRun.get -> Penghou.Qingniao.WorkflowRunExecutionReference!
+Penghou.Qingniao.ExternalOperationStartReceipt
+Penghou.Qingniao.ExternalOperationStartReceipt.AcceptedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.ExternalOperationStartReceipt.Disposition.get -> Penghou.Qingniao.ExternalOperationStartDisposition
+Penghou.Qingniao.ExternalOperationStartReceipt.ExternalOperationStartReceipt(Penghou.Qingniao.ExternalOperationStartIdentity! identity, Penghou.Qingniao.ExternalOperationHandle! handle, Penghou.Qingniao.ExternalOperationStartDisposition disposition, Penghou.Qingniao.ExternalOperationState state, System.DateTimeOffset acceptedAt) -> void
+Penghou.Qingniao.ExternalOperationStartReceipt.Handle.get -> Penghou.Qingniao.ExternalOperationHandle!
+Penghou.Qingniao.ExternalOperationStartReceipt.Identity.get -> Penghou.Qingniao.ExternalOperationStartIdentity!
+Penghou.Qingniao.ExternalOperationStartReceipt.State.get -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationStartRequest
+Penghou.Qingniao.ExternalOperationStartRequest.Budget.get -> Penghou.Qingniao.ExternalOperationBudgetHint?
+Penghou.Qingniao.ExternalOperationStartRequest.Capability.get -> string!
+Penghou.Qingniao.ExternalOperationStartRequest.Correlation.get -> Penghou.Qingniao.ExternalOperationCorrelation!
+Penghou.Qingniao.ExternalOperationStartRequest.Deadline.get -> System.DateTimeOffset?
+Penghou.Qingniao.ExternalOperationStartRequest.ExternalOperationStartRequest(Penghou.Qingniao.ExternalOperationStartIdentity! identity, Penghou.Qingniao.ExternalOperationCorrelation! correlation, string! capability, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! inputArtifacts, Penghou.Qingniao.ExternalOperationBudgetHint? budget = null, System.DateTimeOffset? deadline = null) -> void
+Penghou.Qingniao.ExternalOperationStartRequest.Identity.get -> Penghou.Qingniao.ExternalOperationStartIdentity!
+Penghou.Qingniao.ExternalOperationStartRequest.InputArtifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.ExternalOperationStartRequest.SemanticInput.get -> Penghou.Qingniao.ExternalOperationSemanticInputEnvelope!
+Penghou.Qingniao.ExternalOperationStartRequest.VerifySemanticFingerprint(Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier! verifier) -> void
+Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.Accepted = 0 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.CancellationRequested = 5 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.Cancelled = 6 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.Failed = 4 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.Rejected = 8 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.Running = 1 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.Succeeded = 3 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.TimedOut = 7 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.Unknown = 9 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalOperationState.Waiting = 2 -> Penghou.Qingniao.ExternalOperationState
+Penghou.Qingniao.ExternalTaskReference
+Penghou.Qingniao.ExternalTaskReference.ExternalTaskReference(string! provider, string! identifier) -> void
+Penghou.Qingniao.ExternalTaskReference.Identifier.get -> string!
+Penghou.Qingniao.ExternalTaskReference.Provider.get -> string!
+Penghou.Qingniao.ExternalTaskReference.Validate() -> void
+Penghou.Qingniao.HongxianSessionReference
+Penghou.Qingniao.HongxianSessionReference.HongxianSessionReference() -> void
+Penghou.Qingniao.HongxianSessionReference.HongxianSessionReference(string! identifier) -> void
+Penghou.Qingniao.HongxianSessionReference.Identifier.get -> string!
+Penghou.Qingniao.HongxianSessionReference.Validate() -> void
+Penghou.Qingniao.ICandidateRevisionPublicationRegistry
+Penghou.Qingniao.ICandidateRevisionPublicationRegistry.PublishAsync(Penghou.Qingniao.CandidateRevisionReference! candidate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.CandidateRevisionPublication!>
+Penghou.Qingniao.IDelegationService
+Penghou.Qingniao.IDelegationService.CancelAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Penghou.Qingniao.IDelegationService.DelegateAsync(Penghou.Qingniao.DelegationCallerScope! caller, Penghou.Qingniao.DelegationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationHandle!>!
+Penghou.Qingniao.IDelegationService.GetResultAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationResult?>!
+Penghou.Qingniao.IDelegationService.GetStatusAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationProgress?>!
+Penghou.Qingniao.IExternalOperationHandleCaptureSink
+Penghou.Qingniao.IExternalOperationHandleCaptureSink.CaptureAsync(Penghou.Qingniao.ExternalOperationHandleCapture! capture, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.IExternalOperationProvider
+Penghou.Qingniao.IExternalOperationProvider.CancelAsync(Penghou.Qingniao.ExternalOperationCancelRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationCancellationReceipt!>
+Penghou.Qingniao.IExternalOperationProvider.GetResultAsync(Penghou.Qingniao.ExternalOperationHandle! handle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationResult!>
+Penghou.Qingniao.IExternalOperationProvider.ObserveAsync(Penghou.Qingniao.ExternalOperationHandle! handle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationObservation!>
+Penghou.Qingniao.IExternalOperationProvider.ResumeAsync(Penghou.Qingniao.ExternalOperationResumeRequest! request, Penghou.Qingniao.IExternalOperationHandleCaptureSink! handleSink, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationResumeReceipt!>
+Penghou.Qingniao.IExternalOperationProvider.StartAsync(Penghou.Qingniao.ExternalOperationStartRequest! request, Penghou.Qingniao.IExternalOperationHandleCaptureSink! handleSink, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationStartReceipt!>
+Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier
+Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier.Matches(Penghou.Qingniao.ExternalOperationStartIdentity! identity, Penghou.Qingniao.ExternalOperationSemanticInputEnvelope! semanticInput) -> bool
+Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.IndependenceAssessment.Different = 1 -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.IndependenceAssessment.NotApplicable = 3 -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.IndependenceAssessment.Same = 0 -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.IndependenceAssessment.Unknown = 2 -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.ISupervisorContextProvider
+Penghou.Qingniao.ISupervisorContextProvider.GetAsync(Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.SupervisorContextRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.SupervisorContextPackage!>
+Penghou.Qingniao.ModelProvenanceSnapshot
+Penghou.Qingniao.ModelProvenanceSnapshot.Model.get -> string!
+Penghou.Qingniao.ModelProvenanceSnapshot.ModelProvenanceSnapshot(string! provider, string! model, string? modelRevision = null, string? profile = null, string! schemaVersion = "v1") -> void
+Penghou.Qingniao.ModelProvenanceSnapshot.ModelRevision.get -> string?
+Penghou.Qingniao.ModelProvenanceSnapshot.Profile.get -> string?
+Penghou.Qingniao.ModelProvenanceSnapshot.Provider.get -> string!
+Penghou.Qingniao.ModelProvenanceSnapshot.SchemaVersion.get -> string!
+Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.NodeGenerationId.NodeGenerationId() -> void
+Penghou.Qingniao.NodeGenerationId.NodeGenerationId(System.Guid value) -> void
+Penghou.Qingniao.NodeGenerationId.Validate() -> void
+Penghou.Qingniao.NodeGenerationId.Value.get -> System.Guid
+Penghou.Qingniao.ProviderDescriptor
+Penghou.Qingniao.ProviderDescriptor.Capabilities.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityDescriptor!>!
+Penghou.Qingniao.ProviderDescriptor.Enabled.get -> bool
+Penghou.Qingniao.ProviderDescriptor.Models.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.ProviderDescriptor.Priority.get -> int
+Penghou.Qingniao.ProviderDescriptor.Provider.get -> string!
+Penghou.Qingniao.ProviderDescriptor.ProviderDescriptor(string! provider, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityDescriptor!>! capabilities, int priority = 0, bool enabled = true, System.Collections.Generic.IReadOnlyList<string!>? models = null) -> void
+Penghou.Qingniao.ProviderExecutionAttemptReference
+Penghou.Qingniao.ProviderExecutionAttemptReference.AttemptId.get -> string!
+Penghou.Qingniao.ProviderExecutionAttemptReference.Handle.get -> string!
+Penghou.Qingniao.ProviderExecutionAttemptReference.Provider.get -> string!
+Penghou.Qingniao.ProviderExecutionAttemptReference.ProviderExecutionAttemptReference(string! provider, string! attemptId, string! handle) -> void
+Penghou.Qingniao.ProviderExecutionAttemptReference.Validate() -> void
+Penghou.Qingniao.ProviderHints
+Penghou.Qingniao.ProviderHints.Model.get -> string?
+Penghou.Qingniao.ProviderHints.PreferredModels.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.ProviderHints.PreferredProviders.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.ProviderHints.Profile.get -> string?
+Penghou.Qingniao.ProviderHints.Provider.get -> string?
+Penghou.Qingniao.ProviderHints.ProviderHints(string? provider = null, string? model = null, string? profile = null, System.Collections.Generic.IReadOnlyList<string!>? preferredProviders = null, System.Collections.Generic.IReadOnlyList<string!>? preferredModels = null) -> void
+Penghou.Qingniao.ProviderMatch
+Penghou.Qingniao.ProviderMatch.Capabilities.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityDescriptor!>!
+Penghou.Qingniao.ProviderMatch.HintScore.get -> int
+Penghou.Qingniao.ProviderMatch.Provider.get -> Penghou.Qingniao.ProviderDescriptor!
+Penghou.Qingniao.ProviderMatch.ProviderMatch(Penghou.Qingniao.ProviderDescriptor! provider, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityDescriptor!>! capabilities, int hintScore) -> void
+Penghou.Qingniao.ProviderSelection
+Penghou.Qingniao.ProviderSelectionRequest
+Penghou.Qingniao.ProviderSelectionRequest.Hints.get -> Penghou.Qingniao.ProviderHints!
+Penghou.Qingniao.ProviderSelectionRequest.ProviderSelectionRequest(System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityRequirement!>! requiredCapabilities, Penghou.Qingniao.ProviderHints? hints = null) -> void
+Penghou.Qingniao.ProviderSelectionRequest.RequiredCapabilities.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityRequirement!>!
+Penghou.Qingniao.ReviewEvidence
+Penghou.Qingniao.ReviewEvidence.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.ReviewEvidence.Findings.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.EvidenceFinding!>!
+Penghou.Qingniao.ReviewEvidence.Independence.get -> Penghou.Qingniao.ReviewIndependenceEvidence!
+Penghou.Qingniao.ReviewEvidence.Invocation.get -> Penghou.Qingniao.WorkerInvocationEvidence!
+Penghou.Qingniao.ReviewEvidence.Outcome.get -> string!
+Penghou.Qingniao.ReviewEvidence.Reviewer.get -> string!
+Penghou.Qingniao.ReviewEvidence.ReviewEvidence(Penghou.Qingniao.WorkerInvocationEvidence! invocation, string! outcome, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.EvidenceFinding!>! findings, Penghou.Qingniao.ReviewIndependenceEvidence! independence, Penghou.Qingniao.CandidateRevisionReference! candidate, string! reviewer) -> void
+Penghou.Qingniao.ReviewIndependenceEvidence
+Penghou.Qingniao.ReviewIndependenceEvidence.Context.get -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.ReviewIndependenceEvidence.Details.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Penghou.Qingniao.ReviewIndependenceEvidence.ImplementationInvocationId.get -> string!
+Penghou.Qingniao.ReviewIndependenceEvidence.Invocation.get -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.ReviewIndependenceEvidence.Model.get -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.ReviewIndependenceEvidence.Profile.get -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.ReviewIndependenceEvidence.Provider.get -> Penghou.Qingniao.IndependenceAssessment
+Penghou.Qingniao.ReviewIndependenceEvidence.ReviewIndependenceEvidence(string! implementationInvocationId, string! reviewInvocationId, Penghou.Qingniao.IndependenceAssessment invocation, Penghou.Qingniao.IndependenceAssessment context, Penghou.Qingniao.IndependenceAssessment profile, Penghou.Qingniao.IndependenceAssessment model, Penghou.Qingniao.IndependenceAssessment provider, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? details = null) -> void
+Penghou.Qingniao.ReviewIndependenceEvidence.ReviewInvocationId.get -> string!
+Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.StructuralNodeReference.Identifier.get -> string!
+Penghou.Qingniao.StructuralNodeReference.StructuralNodeReference() -> void
+Penghou.Qingniao.StructuralNodeReference.StructuralNodeReference(string! identifier) -> void
+Penghou.Qingniao.StructuralNodeReference.Validate() -> void
+Penghou.Qingniao.SupervisorAction
+Penghou.Qingniao.SupervisorAction.AddConstraint
+Penghou.Qingniao.SupervisorAction.AddConstraint.AddConstraint(string! constraint) -> void
+Penghou.Qingniao.SupervisorAction.AddConstraint.Constraint.get -> string!
+Penghou.Qingniao.SupervisorAction.Approve
+Penghou.Qingniao.SupervisorAction.Approve.Approve(string? rationale = null) -> void
+Penghou.Qingniao.SupervisorAction.Approve.Rationale.get -> string?
+Penghou.Qingniao.SupervisorAction.Cancel
+Penghou.Qingniao.SupervisorAction.Cancel.Cancel(string! reason) -> void
+Penghou.Qingniao.SupervisorAction.Cancel.Reason.get -> string!
+Penghou.Qingniao.SupervisorAction.ChangeExecutor
+Penghou.Qingniao.SupervisorAction.ChangeExecutor.ChangeExecutor(Penghou.Qingniao.ExecutorProfileReference! profile, string! reason) -> void
+Penghou.Qingniao.SupervisorAction.ChangeExecutor.Profile.get -> Penghou.Qingniao.ExecutorProfileReference!
+Penghou.Qingniao.SupervisorAction.ChangeExecutor.Reason.get -> string!
+Penghou.Qingniao.SupervisorAction.Escalate
+Penghou.Qingniao.SupervisorAction.Escalate.Escalate(string! reason) -> void
+Penghou.Qingniao.SupervisorAction.Escalate.Reason.get -> string!
+Penghou.Qingniao.SupervisorAction.ReexecuteNode
+Penghou.Qingniao.SupervisorAction.ReexecuteNode.Reason.get -> string!
+Penghou.Qingniao.SupervisorAction.ReexecuteNode.ReexecuteNode(Penghou.Qingniao.StructuralNodeReference target, string! reason) -> void
+Penghou.Qingniao.SupervisorAction.ReexecuteNode.Target.get -> Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.SupervisorAction.ReexecuteSubgraph
+Penghou.Qingniao.SupervisorAction.ReexecuteSubgraph.Reason.get -> string!
+Penghou.Qingniao.SupervisorAction.ReexecuteSubgraph.ReexecuteSubgraph(Penghou.Qingniao.StructuralNodeReference root, string! reason) -> void
+Penghou.Qingniao.SupervisorAction.ReexecuteSubgraph.Root.get -> Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.SupervisorAction.Reject
+Penghou.Qingniao.SupervisorAction.Reject.Reason.get -> string!
+Penghou.Qingniao.SupervisorAction.Reject.Reject(string! reason) -> void
+Penghou.Qingniao.SupervisorAction.Respond
+Penghou.Qingniao.SupervisorAction.Respond.Respond(string! response) -> void
+Penghou.Qingniao.SupervisorAction.Respond.Response.get -> string!
+Penghou.Qingniao.SupervisorAction.Retry
+Penghou.Qingniao.SupervisorAction.Retry.Reason.get -> string!
+Penghou.Qingniao.SupervisorAction.Retry.Retry(string! reason) -> void
+Penghou.Qingniao.SupervisorAction.SelectAlternative
+Penghou.Qingniao.SupervisorAction.SelectAlternative.AlternativeId.get -> string!
+Penghou.Qingniao.SupervisorAction.SelectAlternative.Rationale.get -> string!
+Penghou.Qingniao.SupervisorAction.SelectAlternative.SelectAlternative(string! alternativeId, string! rationale) -> void
+Penghou.Qingniao.SupervisorCheckpointDescriptor
+Penghou.Qingniao.SupervisorCheckpointDescriptor.CheckpointId.get -> Penghou.Qingniao.SupervisorCheckpointId
+Penghou.Qingniao.SupervisorCheckpointDescriptor.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.SupervisorCheckpointDescriptor.DependentProgressGated.get -> bool
+Penghou.Qingniao.SupervisorCheckpointDescriptor.ExpectedObservableRevision.get -> long
+Penghou.Qingniao.SupervisorCheckpointDescriptor.NodeGeneration.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.SupervisorCheckpointDescriptor.PlanRevision.get -> Penghou.Qingniao.WorkflowPlanRevisionReference!
+Penghou.Qingniao.SupervisorCheckpointDescriptor.Session.get -> Penghou.Qingniao.HongxianSessionReference
+Penghou.Qingniao.SupervisorCheckpointDescriptor.StructuralNode.get -> Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.SupervisorCheckpointDescriptor.SupervisorCheckpointDescriptor(Penghou.Qingniao.SupervisorCheckpointId checkpointId, Penghou.Qingniao.HongxianSessionReference session, Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.WorkflowPlanRevisionReference! planRevision, Penghou.Qingniao.WorkflowRunExecutionReference! workflowRun, Penghou.Qingniao.StructuralNodeReference structuralNode, Penghou.Qingniao.NodeGenerationId nodeGeneration, long expectedObservableRevision, bool dependentProgressGated) -> void
+Penghou.Qingniao.SupervisorCheckpointDescriptor.Validate() -> void
+Penghou.Qingniao.SupervisorCheckpointDescriptor.WorkflowRun.get -> Penghou.Qingniao.WorkflowRunExecutionReference!
+Penghou.Qingniao.SupervisorCheckpointId
+Penghou.Qingniao.SupervisorCheckpointId.SupervisorCheckpointId() -> void
+Penghou.Qingniao.SupervisorCheckpointId.SupervisorCheckpointId(System.Guid value) -> void
+Penghou.Qingniao.SupervisorCheckpointId.Validate() -> void
+Penghou.Qingniao.SupervisorCheckpointId.Value.get -> System.Guid
+Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextFacet.Artifacts = 4 -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextFacet.Correlations = 8 -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextFacet.None = 0 -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextFacet.PrimitiveReferences = 16 -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextFacet.Status = 1 -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextFacet.Summary = 2 -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextItem
+Penghou.Qingniao.SupervisorContextItem.Facet.get -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextItem.Key.get -> string!
+Penghou.Qingniao.SupervisorContextItem.SupervisorContextItem(Penghou.Qingniao.SupervisorContextFacet facet, string! key, string! text) -> void
+Penghou.Qingniao.SupervisorContextItem.Text.get -> string!
+Penghou.Qingniao.SupervisorContextItem.Utf8ByteCount.get -> int
+Penghou.Qingniao.SupervisorContextLimits
+Penghou.Qingniao.SupervisorContextLimits.MaxInlineSummaryBytes.get -> int
+Penghou.Qingniao.SupervisorContextLimits.MaxItems.get -> int
+Penghou.Qingniao.SupervisorContextLimits.SupervisorContextLimits(int maxItems, int maxInlineSummaryBytes) -> void
+Penghou.Qingniao.SupervisorContextPackage
+Penghou.Qingniao.SupervisorContextPackage.AppliedLimits.get -> Penghou.Qingniao.SupervisorContextLimits!
+Penghou.Qingniao.SupervisorContextPackage.Artifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.SupervisorContextPackage.CheckpointId.get -> Penghou.Qingniao.SupervisorCheckpointId
+Penghou.Qingniao.SupervisorContextPackage.Correlations.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ContextCorrelationReference!>!
+Penghou.Qingniao.SupervisorContextPackage.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.SupervisorContextPackage.FacetOutcomes.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ContextFacetOutcome!>!
+Penghou.Qingniao.SupervisorContextPackage.InlineSummaryUtf8Bytes.get -> int
+Penghou.Qingniao.SupervisorContextPackage.Items.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.SupervisorContextItem!>!
+Penghou.Qingniao.SupervisorContextPackage.PrimitiveReferences.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ContextProvenanceReference!>!
+Penghou.Qingniao.SupervisorContextPackage.RequestedFacets.get -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextPackage.Revision.get -> long
+Penghou.Qingniao.SupervisorContextPackage.SupervisorContextPackage(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.SupervisorCheckpointId checkpointId, long revision, Penghou.Qingniao.SupervisorContextFacet requestedFacets, Penghou.Qingniao.SupervisorContextLimits! appliedLimits, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.SupervisorContextItem!>! items, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! artifacts, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ContextCorrelationReference!>! correlations, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ContextProvenanceReference!>! primitiveReferences, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ContextFacetOutcome!>! facetOutcomes) -> void
+Penghou.Qingniao.SupervisorContextPackage.ValidateAgainst(Penghou.Qingniao.SupervisorContextRequest! request, Penghou.Qingniao.DelegationProgress! waitingProgress) -> void
+Penghou.Qingniao.SupervisorContextRequest
+Penghou.Qingniao.SupervisorContextRequest.CheckpointId.get -> Penghou.Qingniao.SupervisorCheckpointId
+Penghou.Qingniao.SupervisorContextRequest.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.SupervisorContextRequest.ExpectedRevision.get -> long
+Penghou.Qingniao.SupervisorContextRequest.Limits.get -> Penghou.Qingniao.SupervisorContextLimits!
+Penghou.Qingniao.SupervisorContextRequest.RequestedFacets.get -> Penghou.Qingniao.SupervisorContextFacet
+Penghou.Qingniao.SupervisorContextRequest.SupervisorContextRequest(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.SupervisorCheckpointId checkpointId, long expectedRevision, Penghou.Qingniao.SupervisorContextFacet requestedFacets, Penghou.Qingniao.SupervisorContextLimits! limits) -> void
+Penghou.Qingniao.SupervisorContextRequest.ValidateAgainst(Penghou.Qingniao.DelegationProgress! waitingProgress) -> void
+Penghou.Qingniao.SupervisorIdentity
+Penghou.Qingniao.SupervisorIdentity.AuthorityScope.get -> string!
+Penghou.Qingniao.SupervisorIdentity.Subject.get -> string!
+Penghou.Qingniao.SupervisorIdentity.SupervisorIdentity(string! authorityScope, string! subject) -> void
+Penghou.Qingniao.SupervisorIdentity.Validate() -> void
+Penghou.Qingniao.SupervisorIntervention
+Penghou.Qingniao.SupervisorIntervention.Action.get -> Penghou.Qingniao.SupervisorAction!
+Penghou.Qingniao.SupervisorIntervention.CheckpointId.get -> Penghou.Qingniao.SupervisorCheckpointId
+Penghou.Qingniao.SupervisorIntervention.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.SupervisorIntervention.ExpectedRevision.get -> long
+Penghou.Qingniao.SupervisorIntervention.InterventionKey.get -> string!
+Penghou.Qingniao.SupervisorIntervention.SupervisorIntervention(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.SupervisorCheckpointId checkpointId, string! interventionKey, long expectedRevision, Penghou.Qingniao.SupervisorAction! action) -> void
+Penghou.Qingniao.SupervisorIntervention.Validate() -> void
+Penghou.Qingniao.ToolProvenance
+Penghou.Qingniao.ToolProvenance.ContentIdentity.get -> Penghou.Qingniao.ArtifactContentIdentity?
+Penghou.Qingniao.ToolProvenance.Name.get -> string!
+Penghou.Qingniao.ToolProvenance.ToolProvenance(string! name, string? version = null, Penghou.Qingniao.ArtifactContentIdentity? contentIdentity = null) -> void
+Penghou.Qingniao.ToolProvenance.Version.get -> string?
+Penghou.Qingniao.ToolProvenanceSnapshot
+Penghou.Qingniao.ToolProvenanceSnapshot.SchemaVersion.get -> string!
+Penghou.Qingniao.ToolProvenanceSnapshot.ToolProvenanceSnapshot(System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ToolProvenance!>! tools, string! schemaVersion = "v1") -> void
+Penghou.Qingniao.ToolProvenanceSnapshot.Tools.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ToolProvenance!>!
+Penghou.Qingniao.UsageProvenanceSnapshot
+Penghou.Qingniao.UsageProvenanceSnapshot.Measurements.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Penghou.Qingniao.UsageProvenanceSnapshot.SchemaVersion.get -> string!
+Penghou.Qingniao.UsageProvenanceSnapshot.UsageProvenanceSnapshot(System.Collections.Generic.IReadOnlyDictionary<string!, string!>? measurements = null, string! schemaVersion = "v1") -> void
+Penghou.Qingniao.ValidationEvidence
+Penghou.Qingniao.ValidationEvidence.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference?
+Penghou.Qingniao.ValidationEvidence.Findings.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.EvidenceFinding!>!
+Penghou.Qingniao.ValidationEvidence.Invocation.get -> Penghou.Qingniao.WorkerInvocationEvidence!
+Penghou.Qingniao.ValidationEvidence.Outcome.get -> string!
+Penghou.Qingniao.ValidationEvidence.ValidationEvidence(Penghou.Qingniao.WorkerInvocationEvidence! invocation, string! outcome, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.EvidenceFinding!>! findings, string? validator = null, Penghou.Qingniao.CandidateRevisionReference? candidate = null) -> void
+Penghou.Qingniao.ValidationEvidence.Validator.get -> string?
+Penghou.Qingniao.WakeHint
+Penghou.Qingniao.WakeHint.AfterRevision.get -> long
+Penghou.Qingniao.WakeHint.CheckpointId.get -> Penghou.Qingniao.SupervisorCheckpointId?
+Penghou.Qingniao.WakeHint.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.WakeHint.ExpiresAt.get -> System.DateTimeOffset?
+Penghou.Qingniao.WakeHint.Reason.get -> string!
+Penghou.Qingniao.WakeHint.WakeHint(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.SupervisorCheckpointId? checkpointId, string! reason, long afterRevision, System.DateTimeOffset? expiresAt = null) -> void
+Penghou.Qingniao.WorkerInvocationEvidence
+Penghou.Qingniao.WorkerInvocationEvidence.Attempt.get -> Penghou.Qingniao.ProviderExecutionAttemptReference!
+Penghou.Qingniao.WorkerInvocationEvidence.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference?
+Penghou.Qingniao.WorkerInvocationEvidence.Capability.get -> string?
+Penghou.Qingniao.WorkerInvocationEvidence.CompletedAt.get -> System.DateTimeOffset?
+Penghou.Qingniao.WorkerInvocationEvidence.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.WorkerInvocationEvidence.Disposition.get -> string!
+Penghou.Qingniao.WorkerInvocationEvidence.ExecutionCategory.get -> string!
+Penghou.Qingniao.WorkerInvocationEvidence.ExecutionCorrelation.get -> Penghou.Qingniao.ExternalOperationCorrelation?
+Penghou.Qingniao.WorkerInvocationEvidence.InputArtifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.WorkerInvocationEvidence.NodeGeneration.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.WorkerInvocationEvidence.OutputArtifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.WorkerInvocationEvidence.Profile.get -> string?
+Penghou.Qingniao.WorkerInvocationEvidence.ProviderData.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Penghou.Qingniao.WorkerInvocationEvidence.RequestedModel.get -> string?
+Penghou.Qingniao.WorkerInvocationEvidence.RequestedProvider.get -> string?
+Penghou.Qingniao.WorkerInvocationEvidence.ResolvedModel.get -> string?
+Penghou.Qingniao.WorkerInvocationEvidence.StartedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.WorkerInvocationEvidence.StructuralNode.get -> Penghou.Qingniao.StructuralNodeReference
+Penghou.Qingniao.WorkerInvocationEvidence.ToolCapabilities.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.WorkerInvocationEvidence.Usage.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Penghou.Qingniao.WorkerInvocationEvidence.WorkerInvocationEvidence(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.StructuralNodeReference structuralNode, Penghou.Qingniao.NodeGenerationId nodeGeneration, string! executionCategory, Penghou.Qingniao.ProviderExecutionAttemptReference! attempt, string! disposition, System.DateTimeOffset startedAt, System.DateTimeOffset? completedAt, string? capability, string? profile, string? requestedProvider, string? requestedModel, string? resolvedModel, System.Collections.Generic.IReadOnlyList<string!>! toolCapabilities, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! inputArtifacts, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! outputArtifacts, Penghou.Qingniao.CandidateRevisionReference? candidate = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? usage = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? providerData = null, Penghou.Qingniao.ExternalOperationCorrelation? executionCorrelation = null) -> void
+Penghou.Qingniao.WorkflowPlanReferenceKind
+Penghou.Qingniao.WorkflowPlanReferenceKind.BuiltInPreset = 0 -> Penghou.Qingniao.WorkflowPlanReferenceKind
+Penghou.Qingniao.WorkflowPlanReferenceKind.FuwenDefinition = 1 -> Penghou.Qingniao.WorkflowPlanReferenceKind
+Penghou.Qingniao.WorkflowPlanRevisionReference
+Penghou.Qingniao.WorkflowPlanRevisionReference.CanonicalFingerprint.get -> string?
+Penghou.Qingniao.WorkflowPlanRevisionReference.Identifier.get -> string!
+Penghou.Qingniao.WorkflowPlanRevisionReference.Kind.get -> Penghou.Qingniao.WorkflowPlanReferenceKind
+Penghou.Qingniao.WorkflowPlanRevisionReference.Revision.get -> string!
+Penghou.Qingniao.WorkflowPlanRevisionReference.Validate() -> void
+Penghou.Qingniao.WorkflowPlanRevisionReference.WorkflowPlanRevisionReference(Penghou.Qingniao.WorkflowPlanReferenceKind kind, string! identifier, string! revision, string? canonicalFingerprint) -> void
+Penghou.Qingniao.WorkflowReference
+Penghou.Qingniao.WorkflowReference.Identifier.get -> string!
+Penghou.Qingniao.WorkflowReference.Identifier.init -> void
+Penghou.Qingniao.WorkflowReference.Provider.get -> string!
+Penghou.Qingniao.WorkflowReference.Provider.init -> void
+Penghou.Qingniao.WorkflowReference.Validate() -> void
+Penghou.Qingniao.WorkflowReference.WorkflowReference(string! Provider, string! Identifier) -> void
+Penghou.Qingniao.WorkflowRunExecutionReference
+Penghou.Qingniao.WorkflowRunExecutionReference.ExecutionEpoch.get -> string!
+Penghou.Qingniao.WorkflowRunExecutionReference.Provider.get -> string!
+Penghou.Qingniao.WorkflowRunExecutionReference.Validate() -> void
+Penghou.Qingniao.WorkflowRunExecutionReference.WorkflowRunExecutionReference(string! provider, string! workflowRunId, string! executionEpoch) -> void
+Penghou.Qingniao.WorkflowRunExecutionReference.WorkflowRunId.get -> string!
+Penghou.Qingniao.WorkspaceReference
+Penghou.Qingniao.WorkspaceReference.Identifier.get -> string!
+Penghou.Qingniao.WorkspaceReference.Identifier.init -> void
+Penghou.Qingniao.WorkspaceReference.Provider.get -> string!
+Penghou.Qingniao.WorkspaceReference.Provider.init -> void
+Penghou.Qingniao.WorkspaceReference.Revision.get -> string?
+Penghou.Qingniao.WorkspaceReference.Revision.init -> void
+Penghou.Qingniao.WorkspaceReference.Validate() -> void
+Penghou.Qingniao.WorkspaceReference.WorkspaceReference(string! Provider, string! Identifier, string? Revision = null) -> void
+override Penghou.Qingniao.CandidateId.ToString() -> string!
+override Penghou.Qingniao.DelegationId.ToString() -> string!
+override Penghou.Qingniao.DelegationResultId.ToString() -> string!
+override Penghou.Qingniao.SupervisorAction.AddConstraint.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.AddConstraint.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.Approve.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.Approve.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.Cancel.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.Cancel.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.ChangeExecutor.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.ChangeExecutor.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.Escalate.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.Escalate.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.ReexecuteNode.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.ReexecuteNode.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.ReexecuteSubgraph.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.ReexecuteSubgraph.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.Reject.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.Reject.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.Respond.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.Respond.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.Retry.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.Retry.Validate() -> void
+override Penghou.Qingniao.SupervisorAction.SelectAlternative.Kind.get -> string!
+override Penghou.Qingniao.SupervisorAction.SelectAlternative.Validate() -> void
+static Penghou.Qingniao.ArtifactContentIdentity.Sha256Bytes(string! hash) -> Penghou.Qingniao.ArtifactContentIdentity
+static Penghou.Qingniao.BudgetAccounting.Apply(Penghou.Qingniao.BudgetDefinition! definition, Penghou.Qingniao.BudgetConsumptionSnapshot! current, Penghou.Qingniao.BudgetConsumptionReceipt! receipt, string? exceededReason = null) -> Penghou.Qingniao.BudgetConsumptionDecision!
+static Penghou.Qingniao.BudgetAccounting.Empty(Penghou.Qingniao.BudgetDefinition! definition, Penghou.Qingniao.DelegationId delegationId) -> Penghou.Qingniao.BudgetConsumptionSnapshot!
+static Penghou.Qingniao.BudgetQuantity.Count(long value) -> Penghou.Qingniao.BudgetQuantity
+static Penghou.Qingniao.BudgetQuantity.MicroCredits(long value) -> Penghou.Qingniao.BudgetQuantity
+static Penghou.Qingniao.BudgetQuantity.Milliseconds(long value) -> Penghou.Qingniao.BudgetQuantity
+static Penghou.Qingniao.BudgetQuantity.MinorCurrencyUnits(string! currency, long value) -> Penghou.Qingniao.BudgetQuantity
+static Penghou.Qingniao.BudgetQuantity.Ticks(long value) -> Penghou.Qingniao.BudgetQuantity
+static Penghou.Qingniao.BudgetQuantity.Tokens(long value) -> Penghou.Qingniao.BudgetQuantity
+static Penghou.Qingniao.CandidateRevisionIdentity.SemanticallyEqual(Penghou.Qingniao.CandidateRevisionReference! left, Penghou.Qingniao.CandidateRevisionReference! right) -> bool
+static Penghou.Qingniao.CandidateRevisionIdentity.SubjectEqual(Penghou.Qingniao.CandidateRevisionReference? left, Penghou.Qingniao.CandidateRevisionReference? right) -> bool
+static Penghou.Qingniao.ContextProvenanceReference.CangjieSnapshot(string! identifier, string? contentHash = null) -> Penghou.Qingniao.ContextProvenanceReference!
+static Penghou.Qingniao.ContextProvenanceReference.HetuIndexPublication(string! repositoryIdentifier, string! indexRunIdentifier, string? indexIdentity = null) -> Penghou.Qingniao.ContextProvenanceReference!
+static Penghou.Qingniao.DelegationId.New() -> Penghou.Qingniao.DelegationId
+static Penghou.Qingniao.EvidenceBundleIdentity.SemanticallyEqual(Penghou.Qingniao.EvidenceBundle? left, Penghou.Qingniao.EvidenceBundle? right) -> bool
+static Penghou.Qingniao.ExecutionIdentityRules.EnsureReopenedWorkNewRunAndEpoch(Penghou.Qingniao.WorkflowRunExecutionReference! previous, Penghou.Qingniao.WorkflowRunExecutionReference! candidate) -> void
+static Penghou.Qingniao.ExecutionIdentityRules.EnsureRetryOrReconnectSameGeneration(Penghou.Qingniao.NodeGenerationId original, Penghou.Qingniao.NodeGenerationId candidate) -> void
+static Penghou.Qingniao.ExecutionIdentityRules.EnsureSemanticReexecutionNewGeneration(Penghou.Qingniao.NodeGenerationId previous, Penghou.Qingniao.NodeGenerationId candidate) -> void
+static Penghou.Qingniao.ExternalOperationObservationRules.ValidateProgression(Penghou.Qingniao.ExternalOperationObservation! previous, Penghou.Qingniao.ExternalOperationObservation! current) -> void
+static Penghou.Qingniao.ProviderSelection.Match(Penghou.Qingniao.ProviderSelectionRequest! request, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ProviderDescriptor!>! providers) -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ProviderMatch!>!
+static Penghou.Qingniao.ProviderSelection.Select(Penghou.Qingniao.ProviderSelectionRequest! request, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ProviderDescriptor!>! providers) -> Penghou.Qingniao.ProviderMatch?
+static Penghou.Qingniao.WorkflowPlanRevisionReference.BuiltInPreset(string! identifier, string! version) -> Penghou.Qingniao.WorkflowPlanRevisionReference!
+static Penghou.Qingniao.WorkflowPlanRevisionReference.FuwenDefinition(string! definitionIdentifier, string! revision, string! canonicalFingerprint) -> Penghou.Qingniao.WorkflowPlanRevisionReference!

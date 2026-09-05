@@ -1,0 +1,78 @@
+#nullable enable
+Penghou.Qingniao.ExternalOperationHandleCaptureConflictKind
+Penghou.Qingniao.ExternalOperationHandleCaptureConflictKind.ExecutionIdentity = 0 -> Penghou.Qingniao.ExternalOperationHandleCaptureConflictKind
+Penghou.Qingniao.ExternalOperationHandleCaptureConflictKind.ReusedHandle = 1 -> Penghou.Qingniao.ExternalOperationHandleCaptureConflictKind
+Penghou.Qingniao.ExternalOperationHandleCaptureConflictException
+Penghou.Qingniao.ExternalOperationHandleCaptureConflictException.ExternalOperationHandleCaptureConflictException(Penghou.Qingniao.ExternalOperationHandleCaptureConflictKind kind) -> void
+Penghou.Qingniao.ExternalOperationHandleCaptureConflictException.Kind.get -> Penghou.Qingniao.ExternalOperationHandleCaptureConflictKind
+Penghou.Qingniao.ExternalOperationHandleCaptureRegistrySnapshot
+Penghou.Qingniao.ExternalOperationHandleCaptureRegistrySnapshot.Captures.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ExternalOperationHandleCapture!>!
+Penghou.Qingniao.ExternalOperationHandleCaptureRegistrySnapshot.Count.get -> int
+Penghou.Qingniao.ExternalOperationHandleCaptureRegistrySnapshot.TryGet(Penghou.Qingniao.ExternalOperationCorrelation! correlation, out Penghou.Qingniao.ExternalOperationHandleCapture? capture) -> bool
+Penghou.Qingniao.ExternalOperationHandleCaptureRegistrySnapshot.TryGet(Penghou.Qingniao.ExternalOperationHandle! handle, out Penghou.Qingniao.ExternalOperationHandleCapture? capture) -> bool
+Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry
+Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.Capacity.get -> int
+Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.CaptureAsync(Penghou.Qingniao.ExternalOperationHandleCapture! capture, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.GetSnapshot() -> Penghou.Qingniao.ExternalOperationHandleCaptureRegistrySnapshot!
+Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.InMemoryExternalOperationHandleCaptureRegistry() -> void
+Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.InMemoryExternalOperationHandleCaptureRegistry(int maximumEntries) -> void
+const Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.MaximumEntries = 256 -> int
+Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.TryGet(Penghou.Qingniao.ExternalOperationCorrelation! correlation, out Penghou.Qingniao.ExternalOperationHandleCapture? capture) -> bool
+Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.TryGet(Penghou.Qingniao.ExternalOperationHandle! handle, out Penghou.Qingniao.ExternalOperationHandleCapture? capture) -> bool
+Penghou.Qingniao.InMemoryProviderRegistry
+Penghou.Qingniao.InMemoryProviderRegistry.InMemoryProviderRegistry() -> void
+const Penghou.Qingniao.InMemoryProviderRegistry.MaximumProviders = 128 -> int
+const Penghou.Qingniao.InMemoryProviderRegistry.MaximumUtf8Bytes = 4194304 -> int
+const Penghou.Qingniao.InMemoryProviderRegistry.MaximumCapabilities = 2048 -> int
+const Penghou.Qingniao.InMemoryProviderRegistry.MaximumCapabilityAttributes = 8192 -> int
+Penghou.Qingniao.InMemoryProviderRegistry.GetSnapshot() -> Penghou.Qingniao.ProviderRegistrySnapshot!
+Penghou.Qingniao.InMemoryProviderRegistry.Match(Penghou.Qingniao.ProviderSelectionRequest! request) -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ProviderMatch!>!
+Penghou.Qingniao.InMemoryProviderRegistry.Register(Penghou.Qingniao.ProviderDescriptor! provider) -> Penghou.Qingniao.ProviderRegistration!
+Penghou.Qingniao.InMemoryProviderRegistry.Select(Penghou.Qingniao.ProviderSelectionRequest! request) -> Penghou.Qingniao.ProviderSelectionResult!
+Penghou.Qingniao.IProviderRegistry
+Penghou.Qingniao.IProviderRegistry.GetSnapshot() -> Penghou.Qingniao.ProviderRegistrySnapshot!
+Penghou.Qingniao.IProviderRegistry.Match(Penghou.Qingniao.ProviderSelectionRequest! request) -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ProviderMatch!>!
+Penghou.Qingniao.IProviderRegistry.Register(Penghou.Qingniao.ProviderDescriptor! provider) -> Penghou.Qingniao.ProviderRegistration!
+Penghou.Qingniao.IProviderRegistry.Select(Penghou.Qingniao.ProviderSelectionRequest! request) -> Penghou.Qingniao.ProviderSelectionResult!
+Penghou.Qingniao.ProviderRegistration
+Penghou.Qingniao.ProviderRegistration.IsNew.get -> bool
+Penghou.Qingniao.ProviderRegistration.Provider.get -> Penghou.Qingniao.ProviderDescriptor!
+Penghou.Qingniao.ProviderRegistration.Revision.get -> long
+Penghou.Qingniao.ProviderRegistrationConflictException
+Penghou.Qingniao.ProviderRegistrationConflictException.Existing.get -> Penghou.Qingniao.ProviderDescriptor!
+Penghou.Qingniao.ProviderRegistrationConflictException.Provider.get -> string!
+Penghou.Qingniao.ProviderRegistrationConflictException.ProviderRegistrationConflictException(string! provider, Penghou.Qingniao.ProviderDescriptor! existing, Penghou.Qingniao.ProviderDescriptor! supplied) -> void
+Penghou.Qingniao.ProviderRegistrationConflictException.Supplied.get -> Penghou.Qingniao.ProviderDescriptor!
+Penghou.Qingniao.ProviderRegistrySnapshot
+Penghou.Qingniao.ProviderRegistrySnapshot.Match(Penghou.Qingniao.ProviderSelectionRequest! request) -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ProviderMatch!>!
+Penghou.Qingniao.ProviderRegistrySnapshot.Providers.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ProviderDescriptor!>!
+Penghou.Qingniao.ProviderRegistrySnapshot.Revision.get -> long
+Penghou.Qingniao.ProviderRegistrySnapshot.Select(Penghou.Qingniao.ProviderSelectionRequest! request) -> Penghou.Qingniao.ProviderSelectionResult!
+Penghou.Qingniao.ProviderSelectionResult
+Penghou.Qingniao.ProviderSelectionResult.IsMatch.get -> bool
+Penghou.Qingniao.ProviderSelectionResult.Match.get -> Penghou.Qingniao.ProviderMatch?
+static Penghou.Qingniao.ProviderSelectionResult.Matched(Penghou.Qingniao.ProviderMatch! match) -> Penghou.Qingniao.ProviderSelectionResult!
+static Penghou.Qingniao.ProviderSelectionResult.NoCompatibleProvider() -> Penghou.Qingniao.ProviderSelectionResult!
+Penghou.Qingniao.ProviderSelectionResult.Status.get -> Penghou.Qingniao.ProviderSelectionStatus
+Penghou.Qingniao.ProviderSelectionStatus
+Penghou.Qingniao.ProviderSelectionStatus.Matched = 0 -> Penghou.Qingniao.ProviderSelectionStatus
+Penghou.Qingniao.ProviderSelectionStatus.NoCompatibleProvider = 1 -> Penghou.Qingniao.ProviderSelectionStatus
+Penghou.Qingniao.IWorkflowPlanHostVerifier
+Penghou.Qingniao.IWorkflowPlanHostVerifier.Verify(Penghou.Qingniao.WorkflowPlanVerificationContext! context) -> Penghou.Qingniao.WorkflowPlanVerificationResult!
+Penghou.Qingniao.WorkflowPlanVerificationContext
+Penghou.Qingniao.WorkflowPlanVerificationContext.Caller.get -> Penghou.Qingniao.DelegationCallerScope!
+Penghou.Qingniao.WorkflowPlanVerificationContext.PlanRevision.get -> Penghou.Qingniao.WorkflowPlanRevisionReference!
+Penghou.Qingniao.WorkflowPlanVerificationContext.Workspace.get -> Penghou.Qingniao.WorkspaceReference!
+Penghou.Qingniao.WorkflowPlanVerificationContext.WorkflowPlanVerificationContext(Penghou.Qingniao.DelegationCallerScope! caller, Penghou.Qingniao.WorkflowPlanRevisionReference! planRevision, Penghou.Qingniao.WorkspaceReference! workspace) -> void
+Penghou.Qingniao.WorkflowPlanVerificationResult
+Penghou.Qingniao.WorkflowPlanVerificationResult.WorkflowPlanVerificationResult(Penghou.Qingniao.WorkflowPlanVerificationStatus status) -> void
+Penghou.Qingniao.WorkflowPlanVerificationResult.IsVerified.get -> bool
+Penghou.Qingniao.WorkflowPlanVerificationResult.Status.get -> Penghou.Qingniao.WorkflowPlanVerificationStatus
+static Penghou.Qingniao.WorkflowPlanVerificationResult.Rejected(Penghou.Qingniao.WorkflowPlanVerificationStatus status) -> Penghou.Qingniao.WorkflowPlanVerificationResult!
+static Penghou.Qingniao.WorkflowPlanVerificationResult.Verified() -> Penghou.Qingniao.WorkflowPlanVerificationResult!
+Penghou.Qingniao.WorkflowPlanVerificationStatus
+Penghou.Qingniao.WorkflowPlanVerificationStatus.FingerprintMismatch = 4 -> Penghou.Qingniao.WorkflowPlanVerificationStatus
+Penghou.Qingniao.WorkflowPlanVerificationStatus.Stale = 3 -> Penghou.Qingniao.WorkflowPlanVerificationStatus
+Penghou.Qingniao.WorkflowPlanVerificationStatus.Unauthorized = 2 -> Penghou.Qingniao.WorkflowPlanVerificationStatus
+Penghou.Qingniao.WorkflowPlanVerificationStatus.Unknown = 1 -> Penghou.Qingniao.WorkflowPlanVerificationStatus
+Penghou.Qingniao.WorkflowPlanVerificationStatus.Verified = 0 -> Penghou.Qingniao.WorkflowPlanVerificationStatus

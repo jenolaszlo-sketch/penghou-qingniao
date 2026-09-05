@@ -1,0 +1,87 @@
+#nullable enable
+const Penghou.Qingniao.DelegationRequestFingerprint.CurrentVersion = "v1" -> string!
+const Penghou.Qingniao.DelegationRequestFingerprint.PlanBoundVersion = "v2" -> string!
+const Penghou.Qingniao.SupervisorInterventionFingerprint.CurrentVersion = "v1" -> string!
+Penghou.Qingniao.DelegationAcceptance
+Penghou.Qingniao.DelegationAcceptance.DelegationAcceptance(Penghou.Qingniao.DelegationId DelegationId, Penghou.Qingniao.DelegationRequestFingerprint Fingerprint, bool IsNew) -> void
+Penghou.Qingniao.DelegationAcceptance.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.DelegationAcceptance.DelegationId.init -> void
+Penghou.Qingniao.DelegationAcceptance.Fingerprint.get -> Penghou.Qingniao.DelegationRequestFingerprint
+Penghou.Qingniao.DelegationAcceptance.Fingerprint.init -> void
+Penghou.Qingniao.DelegationAcceptance.IsNew.get -> bool
+Penghou.Qingniao.DelegationAcceptance.IsNew.init -> void
+Penghou.Qingniao.DelegationLifecycle
+Penghou.Qingniao.DelegationLifecycleViolationException
+Penghou.Qingniao.DelegationLifecycleViolationException.DelegationLifecycleViolationException(string! message) -> void
+Penghou.Qingniao.DelegationRequestFingerprint
+Penghou.Qingniao.DelegationRequestFingerprint.DelegationRequestFingerprint() -> void
+Penghou.Qingniao.DelegationRequestFingerprint.DelegationRequestFingerprint(string! version, string! hash) -> void
+Penghou.Qingniao.DelegationRequestFingerprint.Hash.get -> string!
+Penghou.Qingniao.DelegationRequestFingerprint.Validate() -> void
+Penghou.Qingniao.DelegationRequestFingerprint.Version.get -> string!
+Penghou.Qingniao.DelegationRequestIdentity
+Penghou.Qingniao.DelegationRequestKeyConflictException
+Penghou.Qingniao.DelegationRequestKeyConflictException.Caller.get -> Penghou.Qingniao.DelegationCallerScope!
+Penghou.Qingniao.DelegationRequestKeyConflictException.DelegationRequestKeyConflictException(Penghou.Qingniao.DelegationCallerScope! caller, string! requestKey, Penghou.Qingniao.DelegationRequestFingerprint existingFingerprint, Penghou.Qingniao.DelegationRequestFingerprint suppliedFingerprint) -> void
+Penghou.Qingniao.DelegationRequestKeyConflictException.ExistingFingerprint.get -> Penghou.Qingniao.DelegationRequestFingerprint
+Penghou.Qingniao.DelegationRequestKeyConflictException.RequestKey.get -> string!
+Penghou.Qingniao.DelegationRequestKeyConflictException.SuppliedFingerprint.get -> Penghou.Qingniao.DelegationRequestFingerprint
+Penghou.Qingniao.DelegationRequestValidator
+Penghou.Qingniao.IDelegationAcceptanceRegistry
+Penghou.Qingniao.IDelegationAcceptanceRegistry.AcceptAsync(Penghou.Qingniao.DelegationCallerScope! caller, Penghou.Qingniao.DelegationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationAcceptance!>
+Penghou.Qingniao.InMemoryCandidateRevisionPublicationRegistry
+Penghou.Qingniao.InMemoryCandidateRevisionPublicationRegistry.InMemoryCandidateRevisionPublicationRegistry() -> void
+Penghou.Qingniao.InMemoryCandidateRevisionPublicationRegistry.PublishAsync(Penghou.Qingniao.CandidateRevisionReference! candidate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.CandidateRevisionPublication!>
+Penghou.Qingniao.InMemoryDelegationAcceptanceRegistry
+Penghou.Qingniao.InMemoryDelegationAcceptanceRegistry.AcceptAsync(Penghou.Qingniao.DelegationCallerScope! caller, Penghou.Qingniao.DelegationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationAcceptance!>
+Penghou.Qingniao.InMemoryDelegationAcceptanceRegistry.InMemoryDelegationAcceptanceRegistry() -> void
+Penghou.Qingniao.InMemorySupervisorInterventionAcceptanceRegistry
+Penghou.Qingniao.InMemorySupervisorInterventionAcceptanceRegistry.AcceptAsync(Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.SupervisorIntervention! intervention, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.SupervisorInterventionAcceptance!>
+Penghou.Qingniao.InMemorySupervisorInterventionAcceptanceRegistry.ActivateAsync(Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.DelegationProgress! waitingProgress, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.InMemorySupervisorInterventionAcceptanceRegistry.InMemorySupervisorInterventionAcceptanceRegistry() -> void
+Penghou.Qingniao.ISupervisorInterventionAcceptanceRegistry
+Penghou.Qingniao.ISupervisorInterventionAcceptanceRegistry.AcceptAsync(Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.SupervisorIntervention! intervention, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.SupervisorInterventionAcceptance!>
+Penghou.Qingniao.ISupervisorInterventionAcceptanceRegistry.ActivateAsync(Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.DelegationProgress! waitingProgress, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.SupervisorInterventionAcceptance
+Penghou.Qingniao.SupervisorInterventionAcceptance.CheckpointId.get -> Penghou.Qingniao.SupervisorCheckpointId
+Penghou.Qingniao.SupervisorInterventionAcceptance.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.SupervisorInterventionAcceptance.ExpectedRevision.get -> long
+Penghou.Qingniao.SupervisorInterventionAcceptance.Fingerprint.get -> Penghou.Qingniao.SupervisorInterventionFingerprint
+Penghou.Qingniao.SupervisorInterventionAcceptance.IsNew.get -> bool
+Penghou.Qingniao.SupervisorInterventionAcceptance.ReceiptId.get -> System.Guid
+Penghou.Qingniao.SupervisorInterventionAcceptance.Supervisor.get -> Penghou.Qingniao.SupervisorIdentity!
+Penghou.Qingniao.SupervisorInterventionAcceptance.SupervisorInterventionAcceptance(System.Guid receiptId, Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.SupervisorCheckpointId checkpointId, long expectedRevision, Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.SupervisorInterventionFingerprint fingerprint, bool isNew) -> void
+Penghou.Qingniao.SupervisorInterventionFingerprint
+Penghou.Qingniao.SupervisorInterventionFingerprint.Hash.get -> string!
+Penghou.Qingniao.SupervisorInterventionFingerprint.SupervisorInterventionFingerprint() -> void
+Penghou.Qingniao.SupervisorInterventionFingerprint.SupervisorInterventionFingerprint(string! version, string! hash) -> void
+Penghou.Qingniao.SupervisorInterventionFingerprint.Validate() -> void
+Penghou.Qingniao.SupervisorInterventionFingerprint.Version.get -> string!
+Penghou.Qingniao.SupervisorInterventionIdentity
+Penghou.Qingniao.SupervisorInterventionRejectedException
+Penghou.Qingniao.SupervisorInterventionRejectedException.Reason.get -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectedException.SupervisorInterventionRejectedException(Penghou.Qingniao.SupervisorInterventionRejectionReason reason, string! message) -> void
+Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectionReason.AuthorizedSupervisorLimitExceeded = 7 -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectionReason.CheckpointAlreadyDecided = 4 -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectionReason.CheckpointNotActive = 0 -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectionReason.CheckpointRevisionRegression = 6 -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectionReason.ConflictingCheckpointActivation = 5 -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectionReason.ConflictingInterventionKey = 3 -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectionReason.StaleRevision = 2 -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+Penghou.Qingniao.SupervisorInterventionRejectionReason.UnauthorizedCheckpoint = 1 -> Penghou.Qingniao.SupervisorInterventionRejectionReason
+override Penghou.Qingniao.DelegationRequestFingerprint.ToString() -> string!
+override Penghou.Qingniao.SupervisorInterventionFingerprint.ToString() -> string!
+static Penghou.Qingniao.DelegationLifecycle.CanTransition(Penghou.Qingniao.DelegationState current, Penghou.Qingniao.DelegationState next) -> bool
+static Penghou.Qingniao.DelegationLifecycle.EnsureTransition(Penghou.Qingniao.DelegationState current, Penghou.Qingniao.DelegationState next) -> void
+static Penghou.Qingniao.DelegationLifecycle.IsTerminal(Penghou.Qingniao.DelegationState state) -> bool
+static Penghou.Qingniao.DelegationLifecycle.ValidateProgress(Penghou.Qingniao.DelegationProgress! progress, Penghou.Qingniao.DelegationProgress? previous = null) -> void
+static Penghou.Qingniao.DelegationLifecycle.ValidateResult(Penghou.Qingniao.DelegationResult! result) -> void
+static Penghou.Qingniao.DelegationLifecycle.ValidateResultAvailability(Penghou.Qingniao.DelegationProgress! progress, Penghou.Qingniao.DelegationResult? result) -> void
+static Penghou.Qingniao.DelegationLifecycle.ValidateResultPublication(Penghou.Qingniao.DelegationResult? existing, Penghou.Qingniao.DelegationResult! candidate) -> void
+static Penghou.Qingniao.DelegationRequestIdentity.Canonicalize(Penghou.Qingniao.DelegationRequest! request) -> string!
+static Penghou.Qingniao.DelegationRequestIdentity.Compute(Penghou.Qingniao.DelegationRequest! request) -> Penghou.Qingniao.DelegationRequestFingerprint
+static Penghou.Qingniao.DelegationRequestIdentity.NormalizeText(string! value) -> string!
+static Penghou.Qingniao.DelegationRequestValidator.Validate(Penghou.Qingniao.DelegationRequest! request) -> void
+static Penghou.Qingniao.SupervisorInterventionIdentity.Canonicalize(Penghou.Qingniao.SupervisorIntervention! intervention) -> string!
+static Penghou.Qingniao.SupervisorInterventionIdentity.Compute(Penghou.Qingniao.SupervisorIntervention! intervention) -> Penghou.Qingniao.SupervisorInterventionFingerprint

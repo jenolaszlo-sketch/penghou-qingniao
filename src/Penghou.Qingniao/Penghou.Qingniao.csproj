@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <PackageId>Penghou.Qingniao</PackageId>
+    <Title>Penghou Qingniao</Title>
+    <Description>Provider-neutral delegated-execution runtime for bounded supervised work.</Description>
+    <PackageTags>delegation;supervision;agents;workflow;ai;penghou;qingniao</PackageTags>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Penghou.Qingniao.Abstractions\Penghou.Qingniao.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Penghou.Qingniao.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Penghou.Qingniao.Abstractions/Penghou.Qingniao.Abstractions.csproj" />
+    <Project Path="src/Penghou.Qingniao/Penghou.Qingniao.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Penghou.Qingniao.Tests/Penghou.Qingniao.Tests.csproj" />
+  </Folder>
+</Solution>
