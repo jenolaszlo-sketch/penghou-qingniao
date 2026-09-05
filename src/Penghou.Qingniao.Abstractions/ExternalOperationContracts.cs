@@ -799,6 +799,24 @@ public sealed record ExternalOperationFailure
 }
 
 /// <summary>
+/// Carries a validated provider failure across the external-operation adapter
+/// boundary without exposing an adapter exception message or raw provider
+/// payload to orchestration code.
+/// </summary>
+public sealed class ExternalOperationProviderException : Exception
+{
+    /// <summary>Initializes a provider exception from classified failure data.</summary>
+    public ExternalOperationProviderException(ExternalOperationFailure failure)
+        : base("The external operation provider reported a classified failure.")
+    {
+        Failure = failure ?? throw new ArgumentNullException(nameof(failure));
+    }
+
+    /// <summary>Gets the validated, policy-readable provider failure.</summary>
+    public ExternalOperationFailure Failure { get; }
+}
+
+/// <summary>
 /// Represents the ExternalOperationObservation contract and its invariants.
 /// </summary>
 public sealed record ExternalOperationObservation

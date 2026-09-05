@@ -44,15 +44,41 @@ Cangjie, and Baize own code context, retrieval, and model execution. Qingniao
 coordinates one delegation's execution actor, budgets, capability selection,
 supervision, evidence, and result aggregation.
 
+### Optional workflow composition
+
+Direct delegation remains a first-class Qingniao use case and requires neither
+Fuwen nor Zhinu. Applications that need programmable durable multi-step work
+compose the peer capabilities in this direction:
+
+```text
+Fuwen -> WorkflowPlan -> Zhinu -> Qingniao -> execution actor
+```
+
+Fuwen parses, validates, and compiles workflow semantics. Zhinu schedules and
+recovers the workflow and invokes Qingniao from a normal activity. Qingniao
+receives an ordinary bounded delegation request; it does not parse Fuwen syntax
+or own workflow topology. Qingniao provider retry is limited to safely
+classified failures within one delegation. Zhinu owns workflow/activity retry,
+restart, graph invalidation, compensation, loops, fan-out, signals, and durable
+recovery.
+
+Workflow, node, session, application-request, and parent-delegation lineage is
+represented through neutral correlation values and immutable references rather
+than Fuwen-, Zhinu-, Marang-, or Guyabano-specific fields in core abstractions.
+Do not create `Penghou.Qingniao.Fuwen` or `Penghou.Qingniao.Zhinu` until both
+Marang and Guyabano demonstrate substantial identical adapter code. See
+[ADR 0017](decisions/0017-optional-workflow-composition.md).
+
 ## Extraction
 
-Status: **in progress**
+Status: **extracted and committed; first preview publication pending**
 
 - [x] Create the independent repository and solution layout.
 - [x] Copy the reviewed abstractions, runtime, tests, ADRs, and design notes.
 - [x] Rename namespaces, project identities, packages, and public API baselines.
 - [x] Verify build, formatting, all tests, package contents, and API analysis.
-- [ ] Record the extraction commit and publish `0.1.0-preview.1`.
+- [x] Record the extraction commit.
+- [ ] Publish `0.1.0-preview.1` after the current Milestone 2 package gate.
 - [ ] Replace Marang's duplicate runtime sources with its service boundary after
       the Qingniao package is available.
 
@@ -190,16 +216,17 @@ checkpoint re-entry context.
 
 See [ADR 0007](decisions/0007-artifact-and-candidate-identity.md).
 
-#### Batch 5B — Logical JSON content identity (upstream complete; package pending)
+#### Batch 5B — Canonical semantic content identity (complete)
 
 - [x] Define the separately versioned `penghou-canonical-json-v2` contract in
       Siming without changing or reinterpreting persisted v1 identities.
 - [x] Add type-independent canonicalization and SHA-256 verification from
       persisted JSON, duplicate-property rejection, exact number handling, and
       independent cross-runtime golden vectors in Siming.
-- [ ] Consume the released Siming preview.4 contract in Qingniao artifact
-      references after the package is published; do not copy the canonicalizer
-      or add a temporary Qingniao hash contract.
+- [x] Consume released Siming preview.4 for external-start semantic
+      fingerprints without copying canonicalization or SHA-256 logic.
+- [x] Freeze the semantic JSON projection and golden hash independently of the
+      public CLR record layout.
 
 #### Remaining Batch 5
 
@@ -287,7 +314,7 @@ provider-specific UI.
 
 ## Milestone 2 — In-memory supervision vertical slice
 
-Status: **next — contract freeze complete**
+Status: **in progress — M2.1 through M2.3 complete; M2.4 reconnect proof complete except cancellation/resume**
 
 Implementation is split into dependency-ordered, independently reviewable
 batches. This slice is an in-memory coordinator over the frozen contracts; it
@@ -300,10 +327,10 @@ Zhinu durability.
 2. **M2.2 — Provider policy and reconnect state (complete):** add an immutable provider
    registry snapshot, deterministic explicit selection outcomes, authorized
    adapter lookup, and conflict-safe in-memory external-handle capture.
-3. **M2.3 — Deterministic coordinator:** accept a request, publish monotonic
+3. **M2.3 — Deterministic coordinator (complete):** accept a request, publish monotonic
    progress, advance through an explicit testable pump, and publish exactly one
    immutable terminal result.
-4. **M2.4 — External-operation proof:** use bounded fake providers to prove
+4. **M2.4 — External-operation proof (partial):** use bounded fake providers to prove
    early handle capture, ambiguous acceptance, observation, result retrieval,
    cancellation, and reconnect without duplicate work.
 5. **M2.5 — Supervision proof:** reach a stable checkpoint, emit a
@@ -320,11 +347,15 @@ Zhinu durability.
 
 Fuwen definition references are never interpreted by this slice: the host must
 authorize and verify the exact identifier, revision, and canonical fingerprint.
+The M2 seam proves only neutral reference and admission boundaries; it does not
+execute a Fuwen plan. Advanced execution waits for Fuwen's authoritative P0
+validation and immutable revision lineage, a Fuwen-to-Zhinu execution port, and
+Zhinu's durable external-operation fencing.
 Provider capability claims are selection input, not authorization. Wake hints
 never resume work or extend authority, reconnect never creates a new semantic
 generation, and deterministic validation cannot be overridden by model review.
 
-M2.1 and M2.2 are implemented and verified. Planless requests are bound to the same v2 identity as explicit
+M2.1 through M2.3 are implemented and verified. Planless requests are bound to the same v2 identity as explicit
 `Implement/1` requests; the fixed definition encodes one conditional repair
 without becoming a caller-authored graph. Provider registration is bounded,
 immutable, and host-authorized; selection uses one revisioned snapshot and an
@@ -341,6 +372,20 @@ authority, and the coordinator must resolve the exact match from its captured
 provider snapshot. See
 [ADR 0014](decisions/0014-in-memory-execution-state-and-adapter-authority.md).
 
+The internal explicit-pump coordinator now proves Siming-backed semantic
+fingerprints, stable start identities, revision fencing, early handle capture,
+ambiguous-start reconnect without duplicate work, classified retry policy,
+provider-call accounting, duration/call/retry budgets, validated observation
+and result progression, and immutable terminal replay. Cancellation/resume
+remain in M2.4. See
+[ADR 0016](decisions/0016-siming-fingerprints-and-explicit-pump.md).
+
+Before the coordinator becomes public, combine acceptance and execution-state
+initialization under one atomic authority, bound its retained state, publish the
+actual delegated objective as an immutable input artifact, and introduce
+trusted external-agent/protocol metadata rather than deriving it from a
+provider name.
+
 - [x] Keep `marang_delegate` as a simple predefined `Implement` preset.
 - [x] Add the advanced workflow-selection seam for compiled Fuwen plans.
 - [x] Define provider registry, capability selection, and policy decision
@@ -349,12 +394,13 @@ provider snapshot. See
       context providers.
 - [ ] Exercise wake, bounded re-entry context, intervention, and one selective
       `NodeGeneration` re-execution.
-- [ ] Simulate ambiguous provider acceptance and reconnect through its external
+- [x] Simulate ambiguous provider acceptance and reconnect through its external
       handle.
 - [ ] Seal a candidate revision before parallel Test and Review.
 - [ ] Evaluate deterministic test results separately from reviewer judgment.
 - [ ] Support one bounded fix cycle.
-- [ ] Aggregate a concise `DelegationResult` with artifact references.
+- [x] Aggregate a concise immutable result for the external-operation proof;
+      richer candidate/test/review aggregation remains M2.6–M2.8.
 - [ ] Cover success, rejection, cancellation, budget exhaustion, worker error,
       `NeedsSupervisor`, and planned `WaitingForSupervisor` paths.
 
@@ -402,6 +448,9 @@ Status: **planned**
 - [ ] Inspect and pin the minimum supported Zhinu API/version.
 - [ ] Map the fixed and amended lifecycle to durable workflow steps, signals,
       waits, and selective restart.
+- [ ] Implement the application-layer Zhinu activity adapter that constructs a
+      normal Qingniao delegation request and returns structured result/evidence;
+      keep Fuwen and Zhinu references out of Qingniao's core dependency graph.
 - [ ] Persist Qingniao `SupervisedWork` / `Delegation` and link each Fuwen
       `PlanRevision` to a Zhinu `WorkflowRun` / `ExecutionEpoch`.
 - [ ] Integrate Hongxian as the session/correlation authority for the durable
@@ -539,6 +588,11 @@ contract and a concrete interoperability need; otherwise keep it deferred.
 
 - Replacing Codex or becoming a general autonomous coding agent.
 - A workflow DSL or caller-supplied arbitrary workflow graph.
+- Parsing Fuwen source or owning general workflow nodes, branches, loops,
+  fan-out, compensation graphs, durable timers, or workflow persistence.
+- Requiring Fuwen or Zhinu for direct Qingniao delegation.
+- Creating `Penghou.Qingniao.Fuwen` or `Penghou.Qingniao.Zhinu` before repeated
+  integration code demonstrates a genuine reusable adapter boundary.
 - Unbounded self-reflection, retries, fan-out, or recursive delegation.
 - Recreating native Codex/Claude Code/OpenCode subagent scheduling, repository
   exploration, or prompt iteration.

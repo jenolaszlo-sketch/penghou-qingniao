@@ -10,6 +10,18 @@ activity and the lifecycle around that activity. [Penghou.Zhinu](https://github.
 owns durable workflow scheduling, retries, waits, and recovery; Qingniao can be
 called from a Zhinu activity or embedded directly by an application.
 
+Applications may optionally compose the wider stack as:
+
+```text
+Fuwen -> WorkflowPlan -> Zhinu -> Qingniao -> execution actor
+```
+
+[Penghou.Fuwen](https://github.com/jenolaszlo-sketch/penghou-fuwen)
+describes and validates workflow semantics, Zhinu executes them durably, and
+Qingniao performs each bounded delegated activity. Qingniao itself has no
+compile-time dependency on either Fuwen or Zhinu, so direct delegation remains
+a small first-class use case.
+
 ## Why it exists
 
 Delegating work to an AI agent or another long-running executor is more than a
@@ -33,10 +45,17 @@ Its contracts distinguish:
 | Package | Responsibility |
 | --- | --- |
 | `Penghou.Qingniao.Abstractions` | Stable identities, requests, lifecycle, budgets, capabilities, supervision, artifacts, evidence, and provider contracts. |
-| `Penghou.Qingniao` | Validation, canonical request identity, provider resolution, in-memory execution state, lifecycle policy, and supervision behavior. |
+| `Penghou.Qingniao` | Validation, Siming-backed canonical semantic identity, provider resolution, in-memory execution proof, lifecycle policy, and supervision behavior. |
 
 Neither package exposes MVC, HTTP, MCP, authentication, tenant, filesystem, or
-Marang product configuration types.
+Marang product configuration types. Neither package parses Fuwen source or owns
+workflow graphs, loops, fan-out, compensation, or workflow persistence.
+
+The first preview keeps its coordinator internal while the remaining
+supervision, atomic acceptance, and durable-adapter semantics are proven. The
+public packages currently provide the reviewed contracts and reusable policy,
+identity, registry, and fingerprint components; they should not yet be treated
+as a production scheduler.
 
 ## Ecosystem boundary
 

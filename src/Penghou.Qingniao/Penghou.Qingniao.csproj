@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" PrivateAssets="all" />
+    <PackageReference Include="Penghou.Siming" Version="0.1.0-preview.4" />
   </ItemGroup>
 
   <ItemGroup>

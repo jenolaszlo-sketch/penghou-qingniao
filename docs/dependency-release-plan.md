@@ -41,6 +41,17 @@ Fuwen's advanced-plan validation gate and Zhinu's remaining durable external-
 operation fencing work block only their later integrations; they do not block
 Qingniao extraction or its deterministic in-memory proof.
 
+The optional composition direction is:
+
+```text
+Fuwen -> WorkflowPlan -> Zhinu activity -> Qingniao -> executor
+```
+
+Fuwen P0 admission, immutable revision lineage, and its Zhinu execution port,
+together with Zhinu external-operation fencing, are upstream gates for
+workflow-backed delegation. They are not gates for publishing or consuming
+Qingniao's direct-delegation contracts and policy components.
+
 ## Gate 2 — Qingniao extraction
 
 Status: **implementation complete; awaiting commit and first preview publication**
@@ -51,17 +62,22 @@ Status: **implementation complete; awaiting commit and first preview publication
   compatibility shims without a consumer.
 - [ ] Publish `Penghou.Qingniao.Abstractions` and `Penghou.Qingniao`
   `0.1.0-preview.1` so Marang can remove the transitional duplicate source.
-- [ ] Consume Siming preview.4 and close canonical-fingerprint integration in
-  the next implementation batch.
+- [x] Consume Siming preview.4 and close the external-start canonical
+  fingerprint integration.
 
 ## Gate 3 — Qingniao coordinator
 
-Status: **queued**
+Status: **in progress**
 
-- Complete the explicit-pump in-memory coordinator.
-- Prove early handle capture and ambiguous-start reconnect.
+- [x] Complete the internal explicit-pump in-memory coordinator proof.
+- [x] Prove early handle capture and ambiguous-start reconnect.
+- [x] Add typed provider-failure classification and enforce call, retry, and
+  duration budgets without leaking raw exception messages.
+- [ ] Complete cancellation/resume and supervision behavior.
 - Prove candidate sealing, deterministic Test, independent Review, bounded
   supervision, one repair generation, and terminal-result immutability.
+- Resolve atomic acceptance/state initialization, bounded retained state, and
+  immutable objective input before making the coordinator public.
 - Run API, XML, multi-target, package, and isolated-consumer verification.
 
 Publish the first preview after the extraction verification. Marang and
@@ -76,6 +92,9 @@ Status: **queued**
 - Expose the minimal MCP submission/status/result/cancel surface.
 - Add supervision, artifact retrieval, and HTTP operations only after their
   authorization and response-bound tests pass.
+- Add Fuwen workflow submission only after Fuwen P0 admission and the
+  Fuwen-to-Zhinu port are available; Marang composes the peers rather than
+  routing Fuwen or Zhinu through Qingniao.
 
 ## Gate 5 — Provider, durability, and dogfood
 
@@ -84,6 +103,9 @@ Status: **queued**
 - Prove one isolated Codex provider and reconnect without duplicate work.
 - Map Qingniao activities to Zhinu durability and Hongxian/Siming audit.
 - Exercise Qingniao directly from Guyabano and remotely through Marang.
+- Exercise workflow-backed delegation in both Marang and Guyabano through the
+  same `Fuwen -> Zhinu -> Qingniao` boundary before considering an adapter
+  package.
 - Add provider/client packages only when demonstrated reuse justifies them.
 
 ## Release discipline

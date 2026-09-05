@@ -19,6 +19,10 @@ Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.InMemoryExternal
 const Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.MaximumEntries = 256 -> int
 Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.TryGet(Penghou.Qingniao.ExternalOperationCorrelation! correlation, out Penghou.Qingniao.ExternalOperationHandleCapture? capture) -> bool
 Penghou.Qingniao.InMemoryExternalOperationHandleCaptureRegistry.TryGet(Penghou.Qingniao.ExternalOperationHandle! handle, out Penghou.Qingniao.ExternalOperationHandleCapture? capture) -> bool
+Penghou.Qingniao.SimingExternalOperationSemanticFingerprintVerifier
+Penghou.Qingniao.SimingExternalOperationSemanticFingerprintVerifier.SimingExternalOperationSemanticFingerprintVerifier() -> void
+Penghou.Qingniao.SimingExternalOperationSemanticFingerprintVerifier.Compute(Penghou.Qingniao.ExternalOperationSemanticInputEnvelope! semanticInput) -> string!
+Penghou.Qingniao.SimingExternalOperationSemanticFingerprintVerifier.Matches(Penghou.Qingniao.ExternalOperationStartIdentity! identity, Penghou.Qingniao.ExternalOperationSemanticInputEnvelope! semanticInput) -> bool
 Penghou.Qingniao.InMemoryProviderRegistry
 Penghou.Qingniao.InMemoryProviderRegistry.InMemoryProviderRegistry() -> void
 const Penghou.Qingniao.InMemoryProviderRegistry.MaximumProviders = 128 -> int
