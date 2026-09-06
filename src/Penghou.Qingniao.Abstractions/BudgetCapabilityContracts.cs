@@ -526,6 +526,23 @@ public sealed record BudgetExceededOutcome
         Guid triggeringReceiptId,
         string reason,
         DateTimeOffset recordedAt)
+        : this(delegationId, definitionVersion, charge, limit, consumed, consumed, null, triggeringReceiptId, triggeringReceiptId, reason, recordedAt)
+    {
+    }
+
+    /// <summary>Initializes a preflight decision with actual and refused accounting.</summary>
+    public BudgetExceededOutcome(
+        DelegationId delegationId,
+        string definitionVersion,
+        BudgetCharge charge,
+        BudgetQuantity limit,
+        BudgetQuantity consumed,
+        BudgetQuantity actualConsumed,
+        BudgetCharge? refusedCharge,
+        Guid decisionId,
+        Guid? triggeringReceiptId,
+        string reason,
+        DateTimeOffset recordedAt)
     {
         ArtifactContracts.RequireDelegation(delegationId, nameof(delegationId));
         DefinitionVersion = ArtifactContracts.Version(definitionVersion, nameof(definitionVersion));
@@ -533,6 +550,22 @@ public sealed record BudgetExceededOutcome
         Charge.Amount.Validate();
         limit.Validate();
         consumed.Validate();
+        actualConsumed.Validate();
+        limit.EnsureCompatible(actualConsumed);
+        if (refusedCharge is not null)
+        {
+            refusedCharge.Amount.Validate();
+            actualConsumed.EnsureCompatible(refusedCharge.Amount);
+            if (!string.Equals(refusedCharge.Dimension, Charge.Dimension, StringComparison.Ordinal))
+            {
+                throw new ArgumentException("A refused budget charge must use the exceeded dimension.", nameof(refusedCharge));
+            }
+
+            if (refusedCharge.Amount.Value == 0)
+            {
+                throw new ArgumentException("A refused budget charge must be positive.", nameof(refusedCharge));
+            }
+        }
         Charge.Amount.EnsureCompatible(limit);
         Charge.Amount.EnsureCompatible(consumed);
         limit.EnsureCompatible(consumed);
@@ -541,7 +574,27 @@ public sealed record BudgetExceededOutcome
             throw new ArgumentException("A budget-exceeded outcome requires consumption greater than its limit.", nameof(consumed));
         }
 
-        ArtifactContracts.RequireGuid(triggeringReceiptId, nameof(triggeringReceiptId));
+        if (refusedCharge is not null)
+        {
+            if (actualConsumed.Add(refusedCharge.Amount) != consumed)
+            {
+                throw new ArgumentException(
+                    "A preflight budget outcome must equal actual consumption plus its refused charge.",
+                    nameof(consumed));
+            }
+        }
+        else if (actualConsumed != consumed)
+        {
+            throw new ArgumentException(
+                "A post-charge budget outcome must report actual consumption as its consumed value.",
+                nameof(actualConsumed));
+        }
+
+        ArtifactContracts.RequireGuid(decisionId, nameof(decisionId));
+        if (triggeringReceiptId is { } receiptId)
+        {
+            ArtifactContracts.RequireGuid(receiptId, nameof(triggeringReceiptId));
+        }
         Reason = IdentityText.RequireProse(reason, nameof(reason), 2_048);
         if (recordedAt == default)
         {
@@ -551,6 +604,9 @@ public sealed record BudgetExceededOutcome
         DelegationId = delegationId;
         Limit = limit;
         Consumed = consumed;
+        ActualConsumed = actualConsumed;
+        RefusedCharge = refusedCharge;
+        DecisionId = decisionId;
         TriggeringReceiptId = triggeringReceiptId;
         RecordedAt = recordedAt;
     }
@@ -572,13 +628,17 @@ public sealed record BudgetExceededOutcome
     /// </summary>
     public BudgetQuantity Limit { get; }
     /// <summary>
-    /// Gets the Consumed value.
+    /// Gets the actual post-charge total or the projected total including a refused preflight charge.
     /// </summary>
     public BudgetQuantity Consumed { get; }
-    /// <summary>
-    /// Gets the TriggeringReceiptId value.
-    /// </summary>
-    public Guid TriggeringReceiptId { get; }
+    /// <summary>Gets the amount actually consumed before a preflight refusal.</summary>
+    public BudgetQuantity ActualConsumed { get; }
+    /// <summary>Gets the positive proposed charge refused before provider execution, if any.</summary>
+    public BudgetCharge? RefusedCharge { get; }
+    /// <summary>Gets the deterministic budget decision identity.</summary>
+    public Guid DecisionId { get; }
+    /// <summary>Gets the actual post-charge receipt identity, if one exists.</summary>
+    public Guid? TriggeringReceiptId { get; }
     /// <summary>
     /// Gets the Reason value.
     /// </summary>

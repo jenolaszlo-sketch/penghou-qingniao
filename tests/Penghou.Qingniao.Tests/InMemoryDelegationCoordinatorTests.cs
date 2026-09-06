@@ -93,7 +93,7 @@ public sealed class InMemoryDelegationCoordinatorTests
             first.Progress.Revision,
             TestContext.Current.CancellationToken);
 
-        exhausted.Progress.State.Should().Be(DelegationState.Failed);
+        exhausted.Progress.State.Should().Be(DelegationState.BudgetExceeded);
         exhausted.Progress.WorkerCalls.Should().Be(1);
         exhausted.Progress.Retries.Should().Be(0);
         provider.StartCalls.Should().Be(1);
@@ -293,7 +293,7 @@ public sealed class InMemoryDelegationCoordinatorTests
 
         var exhausted = await coordinator.PumpAsync(acceptance.DelegationId, started.Progress.Revision, TestContext.Current.CancellationToken);
 
-        exhausted.Progress.State.Should().Be(DelegationState.Failed);
+        exhausted.Progress.State.Should().Be(DelegationState.BudgetExceeded);
         exhausted.Progress.WorkerCalls.Should().Be(1);
         provider.StartCalls.Should().Be(1);
         provider.ObserveCalls.Should().Be(0);

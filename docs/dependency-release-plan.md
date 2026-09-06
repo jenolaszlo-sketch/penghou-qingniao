@@ -67,14 +67,17 @@ Status: **implementation complete; awaiting commit and first preview publication
 
 ## Gate 3 — Qingniao coordinator
 
-Status: **in progress**
+Status: **complete for the M2.8 in-memory coordinator proof; durable integration remains downstream**
 
 - [x] Complete the internal explicit-pump in-memory coordinator proof.
 - [x] Prove early handle capture and ambiguous-start reconnect.
 - [x] Add typed provider-failure classification and enforce call, retry, and
   duration budgets without leaking raw exception messages.
-- [ ] Complete cancellation/resume and supervision behavior.
-- Prove candidate sealing, deterministic Test, independent Review, bounded
+- [x] Complete cancellation/resume and supervision behavior, including
+  confirmed/requested/rejected/unknown reconciliation, bounded safety calls,
+  honest `NeedsSupervisor` when no adapter or handle authority remains, and
+  stable `WaitingForSupervisor` checkpoints.
+- [x] Prove candidate sealing, deterministic Test, independent Review, bounded
   supervision, one repair generation, and terminal-result immutability.
 - Resolve atomic acceptance/state initialization, bounded retained state, and
   immutable objective input before making the coordinator public.

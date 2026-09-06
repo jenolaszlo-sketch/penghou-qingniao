@@ -133,6 +133,56 @@ public sealed class BudgetCapabilityContractsTests
     }
 
     [Fact]
+    public void Preflight_budget_decision_keeps_actual_usage_and_refused_charge_distinct()
+    {
+        var decision = new BudgetExceededOutcome(
+            Delegation,
+            BudgetDefinition.CurrentVersion,
+            new BudgetCharge("worker.calls", BudgetQuantity.Count(1)),
+            BudgetQuantity.Count(5),
+            BudgetQuantity.Count(6),
+            BudgetQuantity.Count(5),
+            new BudgetCharge("worker.calls", BudgetQuantity.Count(1)),
+            Guid.NewGuid(),
+            null,
+            "the next worker call was refused",
+            RecordedAt);
+
+        decision.ActualConsumed.Value.Should().Be(5);
+        decision.RefusedCharge!.Amount.Value.Should().Be(1);
+        decision.Consumed.Value.Should().Be(6);
+        decision.TriggeringReceiptId.Should().BeNull();
+
+        var wrongDimension = () => new BudgetExceededOutcome(
+            Delegation,
+            BudgetDefinition.CurrentVersion,
+            new BudgetCharge("worker.calls", BudgetQuantity.Count(1)),
+            BudgetQuantity.Count(5),
+            BudgetQuantity.Count(6),
+            BudgetQuantity.Count(5),
+            new BudgetCharge("retries", BudgetQuantity.Count(1)),
+            Guid.NewGuid(),
+            null,
+            "wrong refused dimension",
+            RecordedAt);
+        wrongDimension.Should().Throw<ArgumentException>();
+
+        var falsePostCharge = () => new BudgetExceededOutcome(
+            Delegation,
+            BudgetDefinition.CurrentVersion,
+            new BudgetCharge("worker.calls", BudgetQuantity.Count(1)),
+            BudgetQuantity.Count(5),
+            BudgetQuantity.Count(6),
+            BudgetQuantity.Count(5),
+            null,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "actual total does not match",
+            RecordedAt);
+        falsePostCharge.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void Provider_matching_is_open_and_deterministic()
     {
         var request = new ProviderSelectionRequest(

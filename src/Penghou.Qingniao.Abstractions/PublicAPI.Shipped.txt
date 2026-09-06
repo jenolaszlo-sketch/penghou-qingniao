@@ -64,14 +64,18 @@ Penghou.Qingniao.BudgetDefinition.Validate() -> void
 Penghou.Qingniao.BudgetDefinition.Version.get -> string!
 Penghou.Qingniao.BudgetExceededOutcome
 Penghou.Qingniao.BudgetExceededOutcome.BudgetExceededOutcome(Penghou.Qingniao.DelegationId delegationId, string! definitionVersion, Penghou.Qingniao.BudgetCharge! charge, Penghou.Qingniao.BudgetQuantity limit, Penghou.Qingniao.BudgetQuantity consumed, System.Guid triggeringReceiptId, string! reason, System.DateTimeOffset recordedAt) -> void
+Penghou.Qingniao.BudgetExceededOutcome.BudgetExceededOutcome(Penghou.Qingniao.DelegationId delegationId, string! definitionVersion, Penghou.Qingniao.BudgetCharge! charge, Penghou.Qingniao.BudgetQuantity limit, Penghou.Qingniao.BudgetQuantity consumed, Penghou.Qingniao.BudgetQuantity actualConsumed, Penghou.Qingniao.BudgetCharge? refusedCharge, System.Guid decisionId, System.Guid? triggeringReceiptId, string! reason, System.DateTimeOffset recordedAt) -> void
+Penghou.Qingniao.BudgetExceededOutcome.ActualConsumed.get -> Penghou.Qingniao.BudgetQuantity
 Penghou.Qingniao.BudgetExceededOutcome.Charge.get -> Penghou.Qingniao.BudgetCharge!
 Penghou.Qingniao.BudgetExceededOutcome.Consumed.get -> Penghou.Qingniao.BudgetQuantity
 Penghou.Qingniao.BudgetExceededOutcome.DefinitionVersion.get -> string!
+Penghou.Qingniao.BudgetExceededOutcome.DecisionId.get -> System.Guid
 Penghou.Qingniao.BudgetExceededOutcome.DelegationId.get -> Penghou.Qingniao.DelegationId
 Penghou.Qingniao.BudgetExceededOutcome.Limit.get -> Penghou.Qingniao.BudgetQuantity
 Penghou.Qingniao.BudgetExceededOutcome.Reason.get -> string!
+Penghou.Qingniao.BudgetExceededOutcome.RefusedCharge.get -> Penghou.Qingniao.BudgetCharge?
 Penghou.Qingniao.BudgetExceededOutcome.RecordedAt.get -> System.DateTimeOffset
-Penghou.Qingniao.BudgetExceededOutcome.TriggeringReceiptId.get -> System.Guid
+Penghou.Qingniao.BudgetExceededOutcome.TriggeringReceiptId.get -> System.Guid?
 Penghou.Qingniao.BudgetLimit
 Penghou.Qingniao.BudgetLimit.BudgetLimit(string! dimension, Penghou.Qingniao.BudgetQuantity maximum) -> void
 Penghou.Qingniao.BudgetLimit.Dimension.get -> string!

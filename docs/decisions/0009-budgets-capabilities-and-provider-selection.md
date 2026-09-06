@@ -18,11 +18,14 @@ snapshot with checked addition and returns a `BudgetExceededOutcome` when a
 ceiling is crossed.
 
 The existing `BudgetExceeded` lifecycle state is a durable terminal outcome.
-Its result must carry the delegation-owned definition version, triggering
-receipt, exact limit, exact accumulated consumption, charged dimension, and a
-bounded reason. Terminal replay equality includes this outcome; it cannot be
-added, removed, or rewritten after publication. Budget exhaustion does not
-roll back workspace effects or evidence.
+Its result carries the delegation-owned definition version, exact limit, and
+bounded reason. Post-charge outcomes retain the triggering receipt and actual
+accumulated consumption. Preflight refusals retain a deterministic decision
+identity, actual consumption, and a positive refused charge; their aggregate
+crossed-ceiling value is not provider work. Terminal replay equality includes
+all of this accounting; it cannot be added, removed, or rewritten after
+publication. Budget exhaustion does not roll back workspace effects or
+evidence.
 
 Provider and model identities remain open strings. `ProviderHints` carries
 bounded provider/model/profile preferences without a closed enum. Providers

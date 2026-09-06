@@ -995,7 +995,7 @@ internal sealed class InMemoryDelegationCoordinator
                         runtime,
                         latest,
                         DelegationState.Failed,
-                        $"Candidate correction failed: {NormalizeFailure(correctionFailure.Message)}",
+                        "Candidate correction failed with an unclassified provider error.",
                         runtime.ResultArtifacts ?? [],
                         CancellationToken.None,
                         latest.Progress.WorkerCalls + 4).ConfigureAwait(false);
@@ -1013,7 +1013,7 @@ internal sealed class InMemoryDelegationCoordinator
                     runtime.EvaluationCancellation = new CancellationTokenSource();
                     runtime.Phase = CoordinatorPhase.Evaluate;
                 }
-                catch (Exception exception)
+                catch
                 {
                     // Leave Candidate and ResultArtifacts pointing at the
                     // immutable generation-1 publication on any bad output.
@@ -1022,7 +1022,7 @@ internal sealed class InMemoryDelegationCoordinator
                         runtime,
                         latest,
                         DelegationState.Failed,
-                        $"Candidate correction validation failed: {NormalizeFailure(exception.Message)}",
+                        "Candidate correction output failed coordinator validation.",
                         runtime.ResultArtifacts ?? [],
                         CancellationToken.None,
                         latest.Progress.WorkerCalls + 4).ConfigureAwait(false);
@@ -1100,24 +1100,16 @@ internal sealed class InMemoryDelegationCoordinator
 
                 runtime.Phase = CoordinatorPhase.Complete;
                 var consumed = ActualWorkerCalls(runtime, current);
-                var budgetOutcome = new BudgetExceededOutcome(
-                    runtime.DelegationId,
-                    "qingniao-runtime-budget-v1",
-                    new BudgetCharge("worker-calls", BudgetQuantity.Count(consumed)),
-                    BudgetQuantity.Count(current.Progress.WorkerCalls),
-                    BudgetQuantity.Count(consumed),
-                    runtime.DelegationId.Value,
-                    $"The correction call and fresh evaluator pair exceed the remaining worker-call budget (required {projectedWorkerCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
-                    Later(current.Progress.UpdatedAt, RequireNow()));
-                return await PublishTerminalAsync(
+                return await PublishBudgetExceededAsync(
                     runtime,
                     current,
-                    DelegationState.BudgetExceeded,
-                    budgetOutcome.Reason,
                     runtime.ResultArtifacts ?? [],
-                    CancellationToken.None,
+                    "worker-calls",
+                    runtime.Request.Budget.MaximumWorkerCalls,
                     consumed,
-                    budgetOutcome).ConfigureAwait(false);
+                    checked(projectedWorkerCalls - consumed),
+                    $"The correction call and fresh evaluator pair exceed the configured worker-call limit (required {projectedWorkerCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
+                    CancellationToken.None).ConfigureAwait(false);
             }
         }
 
@@ -1286,17 +1278,28 @@ internal sealed class InMemoryDelegationCoordinator
             // do not misreport it as an ordinary provider failure.
             if (IsCancellationPending(runtime))
             {
-                return current;
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.NeedsSupervisor,
+                    "Cancellation could not be reconciled because no executable provider adapter is available.",
+                    [],
+                    cancellationToken,
+                    unresolvedConcerns: ["Cancellation remains unresolved because no executable provider adapter is available."])
+                    .ConfigureAwait(false);
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
             return await PublishTerminalAsync(
                 runtime,
                 current,
-                DelegationState.Failed,
-                runtime.ProviderFailure ?? "No executable provider adapter is available.",
+                DelegationState.NeedsSupervisor,
+                runtime.ProviderFailure ?? "No executable provider adapter is available; supervisory authority is required.",
                 [],
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                unresolvedConcerns: ["No executable provider adapter is available; supervisory authority is required."])
+                .ConfigureAwait(false);
         }
 
         var pendingCancellation = runtime.CancellationRequest is not null
@@ -1324,21 +1327,31 @@ internal sealed class InMemoryDelegationCoordinator
         {
             if (pendingCancellation)
             {
-                // Recovery of an accepted start is ordinary work, but a
-                // cancellation intent must not be converted into an
-                // unrelated Failed terminal result merely because recovery
-                // has reached its ordinary budget.
-                runtime.Phase = CoordinatorPhase.Start;
-                return current;
+                // There is no handle to reconcile. Once bounded recovery is
+                // exhausted, an unresolved cancellation must become an
+                // explicit supervisory outcome rather than live forever.
+                return await PublishCancellationNeedsSupervisorAsync(
+                    runtime,
+                    current,
+                    cancellationToken).ConfigureAwait(false);
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await PublishBudgetExceededAsync(
                 runtime,
                 current,
-                DelegationState.Failed,
-                "The provider start retry budget was exhausted before a handle was captured.",
                 [],
+                current.Progress.Retries >= runtime.Request.Budget.MaximumRetries
+                    ? "retries"
+                    : "worker-calls",
+                current.Progress.Retries >= runtime.Request.Budget.MaximumRetries
+                    ? runtime.Request.Budget.MaximumRetries
+                    : runtime.Request.Budget.MaximumWorkerCalls,
+                current.Progress.Retries >= runtime.Request.Budget.MaximumRetries
+                    ? current.Progress.Retries
+                    : current.Progress.WorkerCalls,
+                1,
+                "The configured provider-start resource limit was exhausted before a handle was captured.",
                 cancellationToken).ConfigureAwait(false);
         }
         else
@@ -1501,12 +1514,15 @@ internal sealed class InMemoryDelegationCoordinator
             && current.Progress.WorkerCalls >= runtime.Request.Budget.MaximumWorkerCalls)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await PublishBudgetExceededAsync(
                 runtime,
                 current,
-                DelegationState.Failed,
-                "The worker-call budget was exhausted before observation.",
                 [],
+                "worker-calls",
+                runtime.Request.Budget.MaximumWorkerCalls,
+                current.Progress.WorkerCalls,
+                1,
+                "The configured worker-call limit was exhausted before observation.",
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -1532,13 +1548,18 @@ internal sealed class InMemoryDelegationCoordinator
             if (pendingCancellation)
             {
                 runtime.Phase = CoordinatorPhase.Observe;
-                return current;
+                return await PublishRunningAsync(
+                    runtime,
+                    current,
+                    workerCalls: checked(current.Progress.WorkerCalls + 1),
+                    retries: current.Progress.Retries,
+                    cancellationToken).ConfigureAwait(false);
             }
 
             if (exception.Failure.Retryable)
             {
                 return await RetryTransportAsync(runtime, current, CoordinatorPhase.Observe,
-                    ClassifiedFailureSummary("observation", exception.Failure), cancellationToken).ConfigureAwait(false);
+                    RetryableFailureSummary("observation", exception.Failure), cancellationToken).ConfigureAwait(false);
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
@@ -1551,7 +1572,12 @@ internal sealed class InMemoryDelegationCoordinator
             if (pendingCancellation)
             {
                 runtime.Phase = CoordinatorPhase.Observe;
-                return current;
+                return await PublishRunningAsync(
+                    runtime,
+                    current,
+                    workerCalls: checked(current.Progress.WorkerCalls + 1),
+                    retries: current.Progress.Retries,
+                    cancellationToken).ConfigureAwait(false);
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
@@ -1601,8 +1627,7 @@ internal sealed class InMemoryDelegationCoordinator
             var state = observation.State == ExternalOperationState.Cancelled
                 ? DelegationState.Cancelled
                 : DelegationState.Failed;
-            var summary = observation.Failure?.Summary
-                ?? $"The provider reported external operation state '{observation.State}'.";
+            var summary = ProviderTerminalSummary("observation", observation.State, observation.Failure);
             return await PublishTerminalAsync(runtime, current, state, summary, [], cancellationToken, current.Progress.WorkerCalls + 1)
                 .ConfigureAwait(false);
         }
@@ -1627,7 +1652,13 @@ internal sealed class InMemoryDelegationCoordinator
                     cancellationToken).ConfigureAwait(false);
             }
 
-            return await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+            var observed = await PublishRunningAsync(
+                runtime,
+                current,
+                workerCalls: checked(current.Progress.WorkerCalls + 1),
+                retries: current.Progress.Retries,
+                cancellationToken).ConfigureAwait(false);
+            return await CancelKnownHandleAsync(runtime, observed, cancellationToken).ConfigureAwait(false);
         }
 
         runtime.Phase = observation.ResultAvailable || observation.State == ExternalOperationState.Succeeded
@@ -1671,12 +1702,15 @@ internal sealed class InMemoryDelegationCoordinator
         if (current.Progress.WorkerCalls >= runtime.Request.Budget.MaximumWorkerCalls)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await PublishBudgetExceededAsync(
                 runtime,
                 current,
-                DelegationState.Failed,
-                "The worker-call budget was exhausted before result retrieval.",
                 [],
+                "worker-calls",
+                runtime.Request.Budget.MaximumWorkerCalls,
+                current.Progress.WorkerCalls,
+                1,
+                "The configured worker-call limit was exhausted before result retrieval.",
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -1695,7 +1729,7 @@ internal sealed class InMemoryDelegationCoordinator
             if (exception.Failure.Retryable)
             {
                 return await RetryTransportAsync(runtime, current, CoordinatorPhase.GetResult,
-                    ClassifiedFailureSummary("result", exception.Failure), cancellationToken).ConfigureAwait(false);
+                    RetryableFailureSummary("result", exception.Failure), cancellationToken).ConfigureAwait(false);
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
@@ -1837,14 +1871,14 @@ internal sealed class InMemoryDelegationCoordinator
             {
                 throw;
             }
-            catch (Exception exception)
+            catch
             {
                 runtime.Phase = CoordinatorPhase.Complete;
                 return await PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.Failed,
-                    $"Candidate publication failed: {NormalizeFailure(exception.Message)}",
+                    "Candidate publication failed coordinator validation.",
                     result.Artifacts,
                     cancellationToken,
                     current.Progress.WorkerCalls + 1).ConfigureAwait(false);
@@ -1870,14 +1904,14 @@ internal sealed class InMemoryDelegationCoordinator
             {
                 throw;
             }
-            catch (Exception exception)
+            catch
             {
                 runtime.Phase = CoordinatorPhase.Complete;
                 return await PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.Failed,
-                    $"Candidate publication failed: {NormalizeFailure(exception.Message)}",
+                    "Candidate publication failed coordinator validation.",
                     result.Artifacts,
                     cancellationToken,
                     current.Progress.WorkerCalls + 1).ConfigureAwait(false);
@@ -1890,7 +1924,9 @@ internal sealed class InMemoryDelegationCoordinator
             : result.State == ExternalOperationState.Cancelled
                 ? DelegationState.Cancelled
                 : DelegationState.Failed;
-        var summary = result.Failure?.Summary ?? result.Summary;
+        var summary = result.State == ExternalOperationState.Succeeded
+            ? "The provider completed the operation successfully."
+            : ProviderTerminalSummary("result", result.State, result.Failure);
         return await PublishTerminalAsync(
             runtime,
             current,
@@ -1979,7 +2015,7 @@ internal sealed class InMemoryDelegationCoordinator
         var concerns = new List<string>();
         if (runtime.ValidationFailure is not null)
         {
-            concerns.Add(NormalizeConcern("Deterministic validation fault: " + runtime.ValidationFailure.Message));
+            concerns.Add("Deterministic validation fault: unclassified provider error.");
         }
         else if (outcome.Validation is null)
         {
@@ -1992,7 +2028,7 @@ internal sealed class InMemoryDelegationCoordinator
 
         if (runtime.ReviewFailure is not null)
         {
-            concerns.Add(NormalizeConcern("Independent review fault: " + runtime.ReviewFailure.Message));
+            concerns.Add("Independent review fault: unclassified provider error.");
         }
         else if (outcome.Review is null && candidateReviewer is not null)
         {
@@ -2130,14 +2166,25 @@ internal sealed class InMemoryDelegationCoordinator
             || current.Progress.Retries >= runtime.Request.Budget.MaximumRetries)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await PublishBudgetExceededAsync(
                 runtime,
                 current,
-                DelegationState.Failed,
-                $"{summary} Retry budget exhausted.",
                 [],
+                current.Progress.Retries >= runtime.Request.Budget.MaximumRetries
+                    ? "retries"
+                    : "worker-calls",
+                current.Progress.Retries >= runtime.Request.Budget.MaximumRetries
+                    ? runtime.Request.Budget.MaximumRetries
+                    : runtime.Request.Budget.MaximumWorkerCalls,
+                current.Progress.Retries >= runtime.Request.Budget.MaximumRetries
+                    ? current.Progress.Retries
+                    : current.Progress.WorkerCalls,
+                1,
+                $"{summary} The configured retry or worker-call limit was exhausted.",
                 cancellationToken,
-                current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+                workerCalls: phase == CoordinatorPhase.Start
+                    ? current.Progress.WorkerCalls
+                    : checked(current.Progress.WorkerCalls + 1)).ConfigureAwait(false);
         }
 
         runtime.Phase = phase;
@@ -2253,6 +2300,7 @@ internal sealed class InMemoryDelegationCoordinator
         switch (receipt.Disposition)
         {
             case ExternalOperationCancellationDisposition.ConfirmedCancelled:
+                runtime.CancellationReconciled = true;
                 runtime.Phase = CoordinatorPhase.Complete;
                 return await PublishTerminalAsync(
                     runtime,
@@ -2266,6 +2314,7 @@ internal sealed class InMemoryDelegationCoordinator
                 switch (receipt.State)
                 {
                     case ExternalOperationState.Cancelled:
+                        runtime.CancellationReconciled = true;
                         runtime.Phase = CoordinatorPhase.Complete;
                         return await PublishTerminalAsync(
                             runtime,
@@ -2275,6 +2324,7 @@ internal sealed class InMemoryDelegationCoordinator
                             [],
                             cancellationToken).ConfigureAwait(false);
                     case ExternalOperationState.Succeeded:
+                        runtime.CancellationReconciled = true;
                         runtime.Phase = CoordinatorPhase.GetResult;
                         return current;
                     default:
@@ -2572,6 +2622,66 @@ internal sealed class InMemoryDelegationCoordinator
             [],
             cancellationToken);
 
+    private ValueTask<DelegationExecutionSnapshot> PublishBudgetExceededAsync(
+        RuntimeState runtime,
+        DelegationExecutionSnapshot current,
+        IReadOnlyList<DelegationArtifactReference> artifacts,
+        string dimension,
+        long limit,
+        long actualConsumed,
+        long refusedAmount,
+        string reason,
+        CancellationToken cancellationToken,
+        int? workerCalls = null)
+    {
+        var actual = dimension == "duration"
+            ? BudgetQuantity.Ticks(actualConsumed)
+            : BudgetQuantity.Count(actualConsumed);
+        var limitQuantity = dimension == "duration"
+            ? BudgetQuantity.Ticks(limit)
+            : BudgetQuantity.Count(limit);
+        if (refusedAmount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(refusedAmount), "A refused budget charge must be positive.");
+        }
+
+        var refusedQuantity = dimension == "duration"
+            ? BudgetQuantity.Ticks(refusedAmount)
+            : BudgetQuantity.Count(refusedAmount);
+        var aggregate = new BudgetQuantity(
+            actual.Kind,
+            checked(actual.Value + refusedQuantity.Value),
+            actual.Currency);
+        var outcome = new BudgetExceededOutcome(
+            runtime.DelegationId,
+            "qingniao-runtime-budget-v1",
+            new BudgetCharge(dimension, refusedQuantity),
+            limitQuantity,
+            aggregate,
+            actual,
+            new BudgetCharge(dimension, refusedQuantity),
+            DeterministicBudgetDecisionId(runtime.DelegationId, dimension, actualConsumed, limit),
+            null,
+            reason,
+            Later(current.Progress.UpdatedAt, RequireNow()));
+        return PublishTerminalAsync(
+            runtime,
+            current,
+            DelegationState.BudgetExceeded,
+            reason,
+            artifacts,
+            cancellationToken,
+            workerCalls ?? ActualWorkerCalls(runtime, current),
+            outcome);
+    }
+
+    private static Guid DeterministicBudgetDecisionId(DelegationId delegationId, string dimension, long consumed, long limit)
+    {
+        var payload = $"{delegationId.Value:D}|{dimension}|{consumed}|{limit}";
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payload));
+        return new Guid(hash.AsSpan(0, 16));
+    }
+
     private async ValueTask CaptureReturnedHandleAsync(
         ExternalOperationStartReceipt receipt,
         CancellationToken cancellationToken)
@@ -2696,31 +2806,43 @@ internal sealed class InMemoryDelegationCoordinator
         }
 
         runtime.Phase = CoordinatorPhase.Complete;
-        var recordedAt = Later(current.Progress.UpdatedAt, currentTime);
-        var limit = BudgetQuantity.Ticks(maximum.Value.Ticks);
-        var consumed = BudgetQuantity.Ticks(Math.Max(maximum.Value.Ticks + 1, elapsed.Ticks));
-        var outcome = new BudgetExceededOutcome(
-            runtime.DelegationId,
-            "qingniao-runtime-budget-v1",
-            new BudgetCharge("duration", consumed),
-            limit,
-            consumed,
-            runtime.DelegationId.Value,
-            "Maximum delegation duration exceeded.",
-            recordedAt);
-        return await PublishTerminalAsync(
+        return await PublishBudgetExceededAsync(
             runtime,
             current,
-            DelegationState.BudgetExceeded,
-            "Maximum delegation duration exceeded.",
             [],
-            cancellationToken,
-            current.Progress.WorkerCalls,
-            outcome).ConfigureAwait(false);
+            "duration",
+            maximum.Value.Ticks,
+            Math.Max(0, elapsed.Ticks),
+            1,
+            "Maximum delegation duration exceeded.",
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static string ClassifiedFailureSummary(string operation, ExternalOperationFailure failure) =>
-        $"Provider {operation} reported classified failure code '{failure.Code}'.";
+        failure.Kind == ExternalOperationFailureKind.Rejection
+            ? $"Provider {operation} rejected the operation (classified code '{failure.Code}')."
+            : $"Provider {operation} failed with non-retryable classified {failure.Kind.ToString().ToLowerInvariant()} error (code '{failure.Code}').";
+
+    private static string RetryableFailureSummary(string operation, ExternalOperationFailure failure) =>
+        $"Provider {operation} reported a retryable classified {failure.Kind.ToString().ToLowerInvariant()} error (code '{failure.Code}').";
+
+    private static string ProviderTerminalSummary(
+        string operation,
+        ExternalOperationState state,
+        ExternalOperationFailure? failure)
+    {
+        if (state == ExternalOperationState.Cancelled)
+        {
+            return $"Provider {operation} reported the operation was cancelled.";
+        }
+
+        if (failure is not null)
+        {
+            return ClassifiedFailureSummary(operation, failure);
+        }
+
+        return $"Provider {operation} reported terminal state '{state}'.";
+    }
 
     private static string UnclassifiedFailureSummary(string operation) =>
         $"Provider {operation} failed with an unclassified error.";

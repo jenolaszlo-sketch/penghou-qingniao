@@ -314,7 +314,7 @@ provider-specific UI.
 
 ## Milestone 2 — In-memory supervision vertical slice
 
-Status: **in progress — M2.1 through M2.7 complete**
+Status: **complete — M2.1 through M2.8 complete**
 
 Implementation is split into dependency-ordered, independently reviewable
 batches. This slice is an in-memory coordinator over the frozen contracts; it
@@ -344,9 +344,13 @@ Zhinu durability.
    through a fresh `NodeGeneration` and candidate revision. Preserve the
    original candidate and evidence immutably, publish the corrected candidate
    before a fresh evaluator pair, and retain deterministic validation authority.
-8. **M2.8 — Outcome matrix:** aggregate immutable evidence and cover success,
-   rejection, cancellation, budget exhaustion, provider error,
-   `NeedsSupervisor`, and planned waiting.
+8. **M2.8 — Outcome matrix (complete):** aggregate immutable evidence and
+   cover success, explicit provider rejection, confirmed/requested/rejected/
+   unknown cancellation reconciliation, configured hard-limit exhaustion,
+   retry exhaustion, classified and unclassified provider errors at Start,
+   Observe, and GetResult, `NeedsSupervisor`, `WaitingForSupervisor`, one-shot
+   correction outcomes, cancellation during evaluation/correction, and exact
+   immutable terminal replay.
 
 Fuwen definition references are never interpreted by this slice: the host must
 authorize and verify the exact identifier, revision, and canonical fingerprint.
@@ -358,7 +362,7 @@ Provider capability claims are selection input, not authorization. Wake hints
 never resume work or extend authority, reconnect never creates a new semantic
 generation, and deterministic validation cannot be overridden by model review.
 
-M2.1 through M2.7 are implemented and verified. Planless requests are bound to the same v2 identity as explicit
+M2.1 through M2.8 are implemented and verified. Planless requests are bound to the same v2 identity as explicit
 `Implement/1` requests; the fixed definition encodes one conditional repair
 without becoming a caller-authored graph. Provider registration is bounded,
 immutable, and host-authorized; selection uses one revisioned snapshot and an
@@ -427,21 +431,26 @@ second fix. Cancellation prevents late correction publication, terminal
 evidence is rebuilt from all evidence recorded so far, and worker-call
 accounting derives from configured evaluators and actual started calls. The
 M2.7 coordinator proof and regression suite pass 372 tests on each target
-framework (`net8.0` and `net10.0`).
+framework (`net8.0` and `net10.0`). M2.8 adds 15 parameterized outcome-
+matrix cases per target plus three accounting/authority/reconciliation
+regressions, bringing the full coordinator suite to 390 tests per
+target. The matrix includes provider-phase failures, semantic rejection,
+cancellation reconciliation, resource/retry ceilings, waiting, and
+immutable terminal replay.
 
 Before the coordinator becomes public, combine acceptance and execution-state
 initialization under one atomic authority, bound its retained state, publish the
 actual delegated objective as an immutable input artifact, and introduce
 trusted external-agent/protocol metadata rather than deriving it from a
-provider name.
+provider name. These remain the post-M2 public-surface gates.
 
 - [x] Keep `marang_delegate` as a simple predefined `Implement` preset.
 - [x] Add the advanced workflow-selection seam for compiled Fuwen plans.
 - [x] Define provider registry, capability selection, and policy decision
       contracts.
-- [ ] Implement the fixed strategy with fake agent, model, deterministic, and
+- [x] Implement the fixed strategy with fake agent, model, deterministic, and
       context providers.
-- [ ] Exercise wake, bounded re-entry context, intervention, and one selective
+- [x] Exercise wake, bounded re-entry context, intervention, and one selective
       `NodeGeneration` re-execution.
 - [x] Simulate ambiguous provider acceptance and reconnect through its external
       handle.
@@ -450,8 +459,20 @@ provider name.
 - [x] Support one bounded fix cycle.
 - [x] Aggregate a concise immutable result for the external-operation proof
       and the sealed candidate/test/review evidence bundle.
-- [ ] Cover success, rejection, cancellation, budget exhaustion, worker error,
-      `NeedsSupervisor`, and planned `WaitingForSupervisor` paths.
+- [x] Cover success, explicit provider rejection, cancellation reconciliation,
+      configured resource/retry exhaustion, classified and unclassified worker
+      errors, `NeedsSupervisor`, `WaitingForSupervisor`, correction outcomes,
+      cancellation during evaluation/correction, and exact terminal replay.
+
+The M2.8 outcome matrix is parameterized across the three provider phases
+(`Start`, `Observe`, and `GetResult`). It asserts that provider rejection and
+non-retryable failures use stable sanitized reasons, retryable failures stop at
+the configured retry ceiling, every configured hard resource limit is recorded
+as `BudgetExceeded` with actual call accounting, and cancellation dispositions
+remain nonterminal until reconciled (or become honest `NeedsSupervisor` when no
+authority remains). Terminal evidence includes all work completed before
+cancellation, including the immutable source candidate and first evaluator
+cycle when correction is interrupted.
 
 Exit: the complete policy can be tested without MCP, real models, shells, or a
 workflow database, including waiting, intervention, and selective

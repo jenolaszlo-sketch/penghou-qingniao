@@ -1,7 +1,8 @@
 # ADR 0004: Supervisory waiting and execution identities
 
-Status: accepted for the provider-neutral core; durable execution amendment
-pending implementation.
+Status: accepted for the provider-neutral core and implemented by the M2
+in-memory coordinator; durable execution integration remains a downstream
+Zhinu amendment.
 
 ## Context
 

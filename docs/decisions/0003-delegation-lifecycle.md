@@ -1,9 +1,9 @@
 # ADR 0003: Fixed delegation lifecycle
 
-Status: accepted for the implemented fixed strategy. The planned
-`WaitingForSupervisor` and execution-identity extension is specified
-separately in [ADR 0004](0004-supervisory-waiting-and-generations.md); it is not
-implemented by the current public enum.
+Status: accepted for the implemented fixed strategy. The resumable
+`WaitingForSupervisor` amendment and execution-identity extension are
+implemented by the M2 in-memory coordinator and specified separately in
+[ADR 0004](0004-supervisory-waiting-and-generations.md).
 
 ## Decision
 

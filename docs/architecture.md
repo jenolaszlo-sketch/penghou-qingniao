@@ -95,15 +95,19 @@ Queued -> Running -> Completed
                   -> Cancelled
                   -> BudgetExceeded
                   -> NeedsSupervisor
+                  -> WaitingForSupervisor -> Running
+Queued -------------------------------> WaitingForSupervisor
 ```
 
 For version 1, `BudgetExceeded` and `NeedsSupervisor` are normal terminal
 results with accumulated evidence. `NeedsSupervisor` represents
 unrecoverable/current-policy escalation; Qingniao will not silently resume
 unbounded work. Status has a monotonic revision so MCP clients can suppress
-duplicate updates. A planned lifecycle amendment adds `WaitingForSupervisor`
-as a durable resumable state for an intentional pause. It is not implemented by
-the current enum and will not reopen terminal state.
+duplicate updates. The in-memory M2 lifecycle also implements
+`WaitingForSupervisor` as a nonterminal resumable state for an intentional
+pause. It never reopens terminal state; a missing adapter or exhausted
+cancellation reconciliation authority is reported honestly as terminal
+`NeedsSupervisor`.
 
 Cancellation stops future work. It is not rollback: the candidate workspace,
 completed artifacts, unusual events, and diagnostic evidence remain available.

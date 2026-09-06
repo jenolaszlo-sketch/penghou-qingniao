@@ -84,7 +84,9 @@ public sealed class M27CoordinatorTests
 
         terminal.Progress.State.Should().Be(DelegationState.BudgetExceeded);
         terminal.Progress.WorkerCalls.Should().Be(5);
-        terminal.Result!.BudgetExceeded!.Consumed.Value.Should().Be(5);
+        terminal.Result!.BudgetExceeded!.ActualConsumed.Value.Should().Be(5);
+        terminal.Result.BudgetExceeded.Consumed.Value.Should().Be(8);
+        terminal.Result.BudgetExceeded.RefusedCharge!.Amount.Value.Should().Be(3);
         terminal.Result.Candidate!.Revision.Should().Be(1);
         corrector.Calls.Should().Be(0);
     }

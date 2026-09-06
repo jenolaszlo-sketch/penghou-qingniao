@@ -318,6 +318,9 @@ public static class DelegationLifecycle
             && left.Charge.Amount == right.Charge.Amount
             && left.Limit == right.Limit
             && left.Consumed == right.Consumed
+            && left.ActualConsumed == right.ActualConsumed
+            && Equals(left.RefusedCharge, right.RefusedCharge)
+            && left.DecisionId == right.DecisionId
             && left.TriggeringReceiptId == right.TriggeringReceiptId
             && string.Equals(left.Reason, right.Reason, StringComparison.Ordinal)
             && left.RecordedAt == right.RecordedAt;

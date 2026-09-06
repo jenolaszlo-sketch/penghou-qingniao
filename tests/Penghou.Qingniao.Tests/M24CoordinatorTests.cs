@@ -432,6 +432,7 @@ public sealed class M24CoordinatorTests
             concern.Contains("cancellation", StringComparison.OrdinalIgnoreCase));
         provider.ObserveCalls.Should().Be(InMemoryDelegationCoordinator.CancellationSafetyCallLimit - 1);
         provider.CancelCalls.Should().Be(1);
+        current.Progress.WorkerCalls.Should().Be(provider.StartCalls + provider.ObserveCalls + provider.CancelCalls);
     }
 
     private static (InMemoryDelegationCoordinator Coordinator, InMemoryExternalOperationHandleCaptureRegistry Captures) CreateCoordinator(M24Provider provider)
