@@ -108,6 +108,35 @@ first; Qingniao then consumes the clean public contract.
 | Context snapshots and code-graph revision identities | Cangjie / Hetu | Snapshot/revision APIs, impact/ownership queries, restart reproducibility tests | **Audited:** Qingniao can use reference-only adapters for current snapshot, repository, and index-publication identities. Their P1 upstream gaps remain in the owning roadmaps and are required before richer impact/re-entry integration; they do not block the provider-neutral context seam. |
 | Model execution, tool usage, structured output, and provenance | Baize | Provider/tool contracts, malformed-output handling, usage/provenance tests | **Audited:** reusable for bounded in-memory model work and provenance. Two Baize P0 tool-integrity gaps block authoritative complex-tool integration; durable ordinary completion also requires provider-native external-operation handles. |
 
+### Hongxian/Hetu package-independence acceptance
+
+Qingniao is the non-code proof consumer for Hongxian's optional external
+capabilities. Its normal delegated-execution and durable-session path must not
+reference or transitively acquire Hetu, Roslyn, ANTLR, LadybugDB, code-memory
+configuration, or repository-specific contracts.
+
+- [ ] Add an isolated packed Qingniao consumer representing a non-code research
+  delegation with session history, retry, artifact/evidence publication, and
+  recovery. Verify the resolved package graph contains no code-analysis stack.
+- [ ] Keep Cangjie and Hetu identities as demand-driven opaque context/evidence
+  references supplied by a host adapter; neither capability is required for
+  ordinary Qingniao execution.
+- [ ] If a coding host opts into a future `Penghou.Hongxian.Hetu` adapter, keep
+  synchronization outside Qingniao core. Qingniao may correlate its work with
+  the resulting opaque publication evidence but does not own indexing,
+  freshness, reconciliation, or code-memory policy.
+- [ ] Removing the optional Hetu adapter from a host must remove only code-memory
+  behavior. Delegation, session persistence/recovery, artifacts, retry, and
+  evidence remain unchanged.
+
+The shared-code-graph pivot does not expand Qingniao into workflow ownership.
+Fuwen defines workflows and Zhinu executes them durably; Qingniao coordinates
+one bounded delegated activity and its execution actor. Parallel coding workers
+therefore remain separate delegations/generations whose candidate revisions are
+integrated by Marang or another host. Qingniao may carry bounded opaque
+base/result-state references, but it must not define Hetu workspace publication,
+graph-delta, repository-merge, or code-review semantics.
+
 No downstream batch may silently work around an unaudited primitive capability.
 Gate 0.5 is complete for the current package surfaces; future just-in-time
 integration audits still record any newly discovered release blocker in the
