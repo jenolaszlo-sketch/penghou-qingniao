@@ -314,7 +314,7 @@ provider-specific UI.
 
 ## Milestone 2 — In-memory supervision vertical slice
 
-Status: **in progress — M2.1 through M2.4 complete**
+Status: **in progress — M2.1 through M2.6 complete**
 
 Implementation is split into dependency-ordered, independently reviewable
 batches. This slice is an in-memory coordinator over the frozen contracts; it
@@ -333,10 +333,10 @@ Zhinu durability.
 4. **M2.4 — External-operation proof (complete):** use bounded fake providers to prove
    early handle capture, ambiguous acceptance, observation, result retrieval,
    cancellation, and reconnect without duplicate work.
-5. **M2.5 — Supervision proof:** reach a stable checkpoint, emit a
+5. **M2.5 — Supervision proof (complete):** reach a stable checkpoint, emit a
    non-authorizing wake hint, assemble bounded re-entry context, and apply one
    authorized revision-fenced intervention exactly once.
-6. **M2.6 — Candidate and evidence proof:** seal one candidate before parallel
+6. **M2.6 — Candidate and evidence proof (complete):** seal one candidate before parallel
    deterministic Test and independent Review, both against the exact immutable
    candidate revision.
 7. **M2.7 — Bounded correction:** evaluate the independent outcomes and allow
@@ -355,7 +355,7 @@ Provider capability claims are selection input, not authorization. Wake hints
 never resume work or extend authority, reconnect never creates a new semantic
 generation, and deterministic validation cannot be overridden by model review.
 
-M2.1 through M2.3 are implemented and verified. Planless requests are bound to the same v2 identity as explicit
+M2.1 through M2.6 are implemented and verified. Planless requests are bound to the same v2 identity as explicit
 `Implement/1` requests; the fixed definition encodes one conditional repair
 without becoming a caller-authored graph. Provider registration is bounded,
 immutable, and host-authorized; selection uses one revisioned snapshot and an
@@ -390,6 +390,26 @@ immutable, and observes a newly captured handle after an ambiguous lost receipt
 without issuing a duplicate resume call. See
 [ADR 0016](decisions/0016-siming-fingerprints-and-explicit-pump.md).
 
+M2.5 adds the single-node supervision proof. A provider `Waiting` observation
+is published as a stable `WaitingForSupervisor` checkpoint before its wake hint
+or host authorization is exposed; ordinary pumps then make no provider call.
+Host methods serialize activation, bounded exact-fence context retrieval, hint
+reads, intervention acceptance, pumping, and cancellation through the runtime
+gate; the registry and execution provider are trusted in-memory dependencies
+and are expected not to re-enter the coordinator while their callbacks run.
+Context callbacks run outside that gate and their exact fence is revalidated
+before return. This slice supports `Approve` only, applies the accepted decision through
+the existing resume machinery, preserves `NodeGeneration`, and treats exact
+replays and ambiguous resume captures as idempotent. Because `DelegationRequest`
+does not contain a Hongxian session, the in-memory checkpoint uses a clearly
+marked deterministic placeholder session identity; it is not durable Hongxian
+authority. Independent-branch progress and selective multi-node re-execution
+remain deferred until the workflow/durable integration slice.
+Direct `ResumeAsync` is deliberately not an authorization path; only an
+accepted `Approve` may create or apply a pending resume intent. Each later
+provider waiting episode receives a fresh checkpoint ID, and wake hints expire
+after a bounded interval and are absent outside their exact active wait.
+
 Before the coordinator becomes public, combine acceptance and execution-state
 initialization under one atomic authority, bound its retained state, publish the
 actual delegated objective as an immutable input artifact, and introduce
@@ -406,11 +426,11 @@ provider name.
       `NodeGeneration` re-execution.
 - [x] Simulate ambiguous provider acceptance and reconnect through its external
       handle.
-- [ ] Seal a candidate revision before parallel Test and Review.
-- [ ] Evaluate deterministic test results separately from reviewer judgment.
+- [x] Seal a candidate revision before parallel Test and Review.
+- [x] Evaluate deterministic test results separately from reviewer judgment.
 - [ ] Support one bounded fix cycle.
-- [x] Aggregate a concise immutable result for the external-operation proof;
-      richer candidate/test/review aggregation remains M2.6–M2.8.
+- [x] Aggregate a concise immutable result for the external-operation proof
+      and the sealed candidate/test/review evidence bundle.
 - [ ] Cover success, rejection, cancellation, budget exhaustion, worker error,
       `NeedsSupervisor`, and planned `WaitingForSupervisor` paths.
 

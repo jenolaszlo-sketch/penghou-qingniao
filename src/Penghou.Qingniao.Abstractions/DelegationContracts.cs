@@ -691,8 +691,24 @@ public sealed record DelegationEvidence
 /// <summary>
 /// Represents the DelegationResult contract and its invariants.
 /// </summary>
+#pragma warning disable RS0026, RS0027
 public sealed record DelegationResult
 {
+    /// <summary>Initializes a legacy result without candidate evidence.</summary>
+    public DelegationResult(
+        DelegationId delegationId,
+        DelegationState state,
+        string summary,
+        DelegationEvidence evidence,
+        IReadOnlyList<DelegationArtifactReference> artifacts,
+        IReadOnlyList<string> unresolvedConcerns,
+        DateTimeOffset completedAt,
+        EvidenceBundle? normalizedEvidence = null,
+        BudgetExceededOutcome? budgetExceeded = null)
+        : this(delegationId, state, summary, evidence, artifacts, unresolvedConcerns, completedAt, normalizedEvidence, budgetExceeded, null)
+    {
+    }
+
     /// <summary>
     /// Initializes a new instance of the DelegationResult type.
     /// </summary>
@@ -704,8 +720,9 @@ public sealed record DelegationResult
         IReadOnlyList<DelegationArtifactReference> artifacts,
         IReadOnlyList<string> unresolvedConcerns,
         DateTimeOffset completedAt,
-        EvidenceBundle? normalizedEvidence = null,
-        BudgetExceededOutcome? budgetExceeded = null)
+        EvidenceBundle? normalizedEvidence,
+        BudgetExceededOutcome? budgetExceeded,
+        DelegationResultReference? resultReference)
     {
         IdentityText.RequireNonEmpty(delegationId.Value, nameof(delegationId));
         if (!Enum.IsDefined(state))
@@ -734,6 +751,21 @@ public sealed record DelegationResult
 
         BudgetExceeded = budgetExceeded;
         EvidenceContracts.ValidateBundleForDelegation(NormalizedEvidence, delegationId, nameof(normalizedEvidence));
+        if (resultReference is not null)
+        {
+            if (resultReference.DelegationId != delegationId)
+            {
+                throw new ArgumentException("A result reference must belong to the result delegation.", nameof(resultReference));
+            }
+
+            if (!resultReference.Artifacts.SequenceEqual(Artifacts)
+                || !EvidenceBundleIdentity.SemanticallyEqual(resultReference.Evidence, normalizedEvidence))
+            {
+                throw new ArgumentException("A result reference must match the terminal result artifacts and evidence.", nameof(resultReference));
+            }
+        }
+
+        ResultReference = resultReference;
     }
 
     /// <summary>
@@ -774,6 +806,10 @@ public sealed record DelegationResult
     /// <see cref="DelegationState.BudgetExceeded"/>.
     /// </summary>
     public BudgetExceededOutcome? BudgetExceeded { get; }
+    /// <summary>Optional immutable candidate/evidence aggregate for M2.6 results.</summary>
+    public DelegationResultReference? ResultReference { get; }
+    /// <summary>The sealed candidate when a result reference is present.</summary>
+    public CandidateRevisionReference? Candidate => ResultReference?.Candidate;
 
     internal const int MaximumSummaryLength = 16_384;
     internal const int MaximumConcerns = 128;

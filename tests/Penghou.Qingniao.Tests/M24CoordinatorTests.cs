@@ -87,17 +87,12 @@ public sealed class M24CoordinatorTests
         var queued = await coordinator.GetAsync(accepted.DelegationId);
         var running = await coordinator.PumpAsync(accepted.DelegationId, queued.Progress.Revision);
         var waiting = await coordinator.PumpAsync(accepted.DelegationId, running.Progress.Revision);
+        var supervisor = new SupervisorIdentity("m24", "operator");
+        await coordinator.ActivateCheckpointAsync(accepted.DelegationId, supervisor);
+        var intervention = new SupervisorIntervention(accepted.DelegationId, waiting.Progress.Checkpoint!.CheckpointId, "resume-1", waiting.Progress.Revision, new SupervisorAction.Approve("Continue."));
 
-        var resumed = await coordinator.ResumeAsync(
-            accepted.DelegationId,
-            waiting.Progress.Revision,
-            "resume-1",
-            reason: "Continue.");
-        var replay = await coordinator.ResumeAsync(
-            accepted.DelegationId,
-            waiting.Progress.Revision,
-            "resume-1",
-            reason: "Continue.");
+        var resumed = await coordinator.ApplyInterventionAsync(supervisor, intervention);
+        var replay = await coordinator.ApplyInterventionAsync(supervisor, intervention);
 
         resumed.Progress.State.Should().Be(DelegationState.Running);
         replay.Progress.Should().BeSameAs(resumed.Progress);
@@ -114,17 +109,12 @@ public sealed class M24CoordinatorTests
         var queued = await coordinator.GetAsync(accepted.DelegationId);
         var running = await coordinator.PumpAsync(accepted.DelegationId, queued.Progress.Revision);
         var waiting = await coordinator.PumpAsync(accepted.DelegationId, running.Progress.Revision);
+        var supervisor = new SupervisorIdentity("m24", "operator");
+        await coordinator.ActivateCheckpointAsync(accepted.DelegationId, supervisor);
+        var intervention = new SupervisorIntervention(accepted.DelegationId, waiting.Progress.Checkpoint!.CheckpointId, "resume-ambiguous-1", waiting.Progress.Revision, new SupervisorAction.Approve("Continue."));
 
-        var first = await coordinator.ResumeAsync(
-            accepted.DelegationId,
-            waiting.Progress.Revision,
-            "resume-ambiguous-1",
-            reason: "Continue.");
-        var replay = await coordinator.ResumeAsync(
-            accepted.DelegationId,
-            waiting.Progress.Revision,
-            "resume-ambiguous-1",
-            reason: "Continue.");
+        var first = await coordinator.ApplyInterventionAsync(supervisor, intervention);
+        var replay = await coordinator.ApplyInterventionAsync(supervisor, intervention);
 
         first.Progress.State.Should().Be(DelegationState.Running);
         replay.Progress.State.Should().Be(DelegationState.Running);
@@ -141,10 +131,13 @@ public sealed class M24CoordinatorTests
         var queued = await coordinator.GetAsync(accepted.DelegationId);
         var running = await coordinator.PumpAsync(accepted.DelegationId, queued.Progress.Revision);
         var waiting = await coordinator.PumpAsync(accepted.DelegationId, running.Progress.Revision);
+        var supervisor = new SupervisorIdentity("m24", "operator");
+        await coordinator.ActivateCheckpointAsync(accepted.DelegationId, supervisor);
+        var intervention = new SupervisorIntervention(accepted.DelegationId, waiting.Progress.Checkpoint!.CheckpointId, "resume-budget-1", waiting.Progress.Revision, new SupervisorAction.Approve());
 
-        var first = await coordinator.ResumeAsync(accepted.DelegationId, waiting.Progress.Revision, "resume-budget-1");
-        var second = await coordinator.ResumeAsync(accepted.DelegationId, waiting.Progress.Revision, "resume-budget-1");
-        var exhausted = await coordinator.ResumeAsync(accepted.DelegationId, waiting.Progress.Revision, "resume-budget-1");
+        var first = await coordinator.ApplyInterventionAsync(supervisor, intervention);
+        var second = await coordinator.ApplyInterventionAsync(supervisor, intervention);
+        var exhausted = await coordinator.ApplyInterventionAsync(supervisor, intervention);
 
         first.Progress.State.Should().Be(DelegationState.Running);
         second.Progress.State.Should().Be(DelegationState.Running);
@@ -366,9 +359,12 @@ public sealed class M24CoordinatorTests
         var queued = await coordinator.GetAsync(accepted.DelegationId);
         var running = await coordinator.PumpAsync(accepted.DelegationId, queued.Progress.Revision);
         var waiting = await coordinator.PumpAsync(accepted.DelegationId, running.Progress.Revision);
+        var supervisor = new SupervisorIdentity("m24", "operator");
+        await coordinator.ActivateCheckpointAsync(accepted.DelegationId, supervisor);
+        var intervention = new SupervisorIntervention(accepted.DelegationId, waiting.Progress.Checkpoint!.CheckpointId, "race-resume-1", waiting.Progress.Revision, new SupervisorAction.Approve());
 
         var cancel = coordinator.CancelAsync(accepted.DelegationId, waiting.Progress.Revision, "race-cancel-1", "Stop now.").AsTask();
-        var resume = coordinator.ResumeAsync(accepted.DelegationId, waiting.Progress.Revision, "race-resume-1").AsTask();
+        var resume = coordinator.ApplyInterventionAsync(supervisor, intervention).AsTask();
         var outcomes = await Task.WhenAll(
             ObserveOutcomeAsync(cancel),
             ObserveOutcomeAsync(resume));
@@ -388,10 +384,10 @@ public sealed class M24CoordinatorTests
         var cancelled = await coordinator.CancelAsync(accepted.DelegationId, running.Progress.Revision, "terminal-cancel-1", "Stop now.");
 
         var cancelReplay = await coordinator.CancelAsync(accepted.DelegationId, 0, "terminal-cancel-1", "Stop now.");
-        var resumeReplay = await coordinator.ResumeAsync(accepted.DelegationId, cancelled.Progress.Revision, "terminal-resume-1");
+        var directResume = () => coordinator.ResumeAsync(accepted.DelegationId, cancelled.Progress.Revision, "terminal-resume-1").AsTask();
+        await directResume.Should().ThrowAsync<InvalidOperationException>();
 
         cancelReplay.Should().BeSameAs(cancelled);
-        resumeReplay.Should().BeSameAs(cancelled);
         provider.CancelCalls.Should().Be(1);
         provider.ResumeCalls.Should().Be(0);
     }
@@ -405,6 +401,12 @@ public sealed class M24CoordinatorTests
         }
         catch (DelegationExecutionStaleException)
         {
+            return (true, null);
+        }
+        catch (SupervisorInterventionRejectedException)
+        {
+            // The serialized winner may transition the checkpoint before the
+            // competing intervention reaches its pre-acceptance fence.
             return (true, null);
         }
     }

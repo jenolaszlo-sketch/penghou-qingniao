@@ -964,8 +964,36 @@ public static class ExternalOperationObservationRules
 /// <summary>
 /// Represents the ExternalOperationResult contract and its invariants.
 /// </summary>
+#pragma warning disable RS0026, RS0027
 public sealed record ExternalOperationResult
 {
+    /// <summary>Initializes a result with a provider-sealed candidate.</summary>
+    public ExternalOperationResult(
+        ExternalOperationHandle handle,
+        ExternalOperationState state,
+        DateTimeOffset completedAt,
+        string summary,
+        IReadOnlyList<DelegationArtifactReference> artifacts,
+        CandidateRevisionReference candidate,
+        ExternalOperationProvenanceSnapshot? provenance = null,
+        ExternalOperationFailure? failure = null)
+        : this(handle, state, completedAt, summary, artifacts, provenance, failure, candidate)
+    {
+    }
+
+    /// <summary>Initializes a legacy result without candidate evidence.</summary>
+    public ExternalOperationResult(
+        ExternalOperationHandle handle,
+        ExternalOperationState state,
+        DateTimeOffset completedAt,
+        string summary,
+        IReadOnlyList<DelegationArtifactReference> artifacts,
+        ExternalOperationProvenanceSnapshot? provenance = null,
+        ExternalOperationFailure? failure = null)
+        : this(handle, state, completedAt, summary, artifacts, provenance, failure, null)
+    {
+    }
+
     /// <summary>
     /// Initializes a new instance of the ExternalOperationResult type.
     /// </summary>
@@ -975,8 +1003,9 @@ public sealed record ExternalOperationResult
         DateTimeOffset completedAt,
         string summary,
         IReadOnlyList<DelegationArtifactReference> artifacts,
-        ExternalOperationProvenanceSnapshot? provenance = null,
-        ExternalOperationFailure? failure = null)
+        ExternalOperationProvenanceSnapshot? provenance,
+        ExternalOperationFailure? failure,
+        CandidateRevisionReference? candidate)
     {
         ArgumentNullException.ThrowIfNull(handle);
         handle.Validate();
@@ -1030,12 +1059,35 @@ public sealed record ExternalOperationResult
             throw new ArgumentException("A successful external result cannot contain a failure.", nameof(failure));
         }
 
+        if (candidate is not null)
+        {
+            if (candidate.DelegationId != handle.Correlation.DelegationId
+                || candidate.StructuralNode != handle.Correlation.StructuralNode
+                || candidate.NodeGeneration != handle.Correlation.NodeGeneration)
+            {
+                throw new ArgumentException(
+                    "A result candidate must belong to the exact external correlation.",
+                    nameof(candidate));
+            }
+
+            // The candidate is a sealed reference to the result artifacts.  A
+            // provider cannot attach a candidate for a different payload (or
+            // silently manufacture one from a mutable path).
+            if (!candidate.Artifacts.SequenceEqual(snapshot))
+            {
+                throw new ArgumentException(
+                    "A result candidate must reference exactly the result artifacts.",
+                    nameof(candidate));
+            }
+        }
+
         Handle = handle;
         State = state;
         CompletedAt = completedAt;
         Artifacts = Array.AsReadOnly(snapshot);
         Provenance = provenance;
         Failure = failure;
+        Candidate = candidate;
     }
 
     /// <summary>
@@ -1066,6 +1118,10 @@ public sealed record ExternalOperationResult
     /// Gets the Failure value.
     /// </summary>
     public ExternalOperationFailure? Failure { get; }
+    /// <summary>
+    /// Gets the optional immutable candidate sealed by the external provider.
+    /// </summary>
+    public CandidateRevisionReference? Candidate { get; }
 }
 
 /// <summary>

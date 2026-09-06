@@ -400,10 +400,21 @@ internal sealed class InMemoryDelegationExecutionStore
             && left.Evidence.ChangedFiles.SequenceEqual(right.Evidence.ChangedFiles, StringComparer.Ordinal)
             && left.Evidence.Commands.SequenceEqual(right.Evidence.Commands, StringComparer.Ordinal)
             && EvidenceBundleIdentity.SemanticallyEqual(left.NormalizedEvidence, right.NormalizedEvidence)
+            && ResultReferenceEqual(left.ResultReference, right.ResultReference)
             && BudgetEqual(left.BudgetExceeded, right.BudgetExceeded)
             && left.Artifacts.SequenceEqual(right.Artifacts)
             && left.UnresolvedConcerns.SequenceEqual(right.UnresolvedConcerns, StringComparer.Ordinal)
             && left.CompletedAt == right.CompletedAt;
+    }
+
+    private static bool ResultReferenceEqual(DelegationResultReference? left, DelegationResultReference? right)
+    {
+        if (left is null || right is null) return left is null && right is null;
+        return left.DelegationId == right.DelegationId
+            && left.ResultId == right.ResultId
+            && CandidateRevisionIdentity.SemanticallyEqual(left.Candidate, right.Candidate)
+            && left.Artifacts.SequenceEqual(right.Artifacts)
+            && EvidenceBundleIdentity.SemanticallyEqual(left.Evidence, right.Evidence);
     }
 
     private static bool BudgetEqual(BudgetExceededOutcome? left, BudgetExceededOutcome? right)
