@@ -62,6 +62,36 @@ public sealed class ExternalOperationHandleCaptureRegistryTests
     }
 
     [Fact]
+    public async Task Rotation_is_fenced_idempotent_and_rejects_foreign_or_reused_handles()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var registry = new InMemoryExternalOperationHandleCaptureRegistry();
+        var existing = Capture("attempt-1", "handle-1", "task-1", 1);
+        var rotated = Capture("attempt-1", "handle-2", "task-1", 2);
+        var foreign = Capture("attempt-2", "handle-foreign", "task-2", 3);
+        var reusedOwner = Capture("attempt-2", "handle-reused", "task-2", 4);
+        var reused = Capture("attempt-1", "handle-reused", "task-1", 5);
+
+        await registry.CaptureAsync(existing, cancellationToken);
+        await registry.RotateAsync(existing.Handle, rotated, cancellationToken);
+        await registry.RotateAsync(rotated.Handle, new ExternalOperationHandleCapture(rotated.Handle, At(6)), cancellationToken);
+
+        registry.GetSnapshot().Captures.Should().ContainSingle().Which.Handle.Should().Be(rotated.Handle);
+
+        var staleExpected = () => registry.RotateAsync(existing.Handle, rotated, cancellationToken).AsTask();
+        var foreignExpected = () => registry.RotateAsync(foreign.Handle, rotated, cancellationToken).AsTask();
+        await registry.CaptureAsync(reusedOwner, cancellationToken);
+        var reusedHandle = () => registry.RotateAsync(rotated.Handle, reused, cancellationToken).AsTask();
+
+        var stale = await staleExpected.Should().ThrowAsync<ExternalOperationHandleCaptureConflictException>();
+        stale.Which.Kind.Should().Be(ExternalOperationHandleCaptureConflictKind.ExecutionIdentity);
+        var foreignConflict = await foreignExpected.Should().ThrowAsync<ExternalOperationHandleCaptureConflictException>();
+        foreignConflict.Which.Kind.Should().Be(ExternalOperationHandleCaptureConflictKind.ExecutionIdentity);
+        var reusedConflict = await reusedHandle.Should().ThrowAsync<ExternalOperationHandleCaptureConflictException>();
+        reusedConflict.Which.Kind.Should().Be(ExternalOperationHandleCaptureConflictKind.ReusedHandle);
+    }
+
+    [Fact]
     public async Task Capacity_is_bounded_and_exact_replays_do_not_consume_capacity()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

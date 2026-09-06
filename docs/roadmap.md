@@ -314,7 +314,7 @@ provider-specific UI.
 
 ## Milestone 2 — In-memory supervision vertical slice
 
-Status: **in progress — M2.1 through M2.3 complete; M2.4 reconnect proof complete except cancellation/resume**
+Status: **in progress — M2.1 through M2.4 complete**
 
 Implementation is split into dependency-ordered, independently reviewable
 batches. This slice is an in-memory coordinator over the frozen contracts; it
@@ -330,7 +330,7 @@ Zhinu durability.
 3. **M2.3 — Deterministic coordinator (complete):** accept a request, publish monotonic
    progress, advance through an explicit testable pump, and publish exactly one
    immutable terminal result.
-4. **M2.4 — External-operation proof (partial):** use bounded fake providers to prove
+4. **M2.4 — External-operation proof (complete):** use bounded fake providers to prove
    early handle capture, ambiguous acceptance, observation, result retrieval,
    cancellation, and reconnect without duplicate work.
 5. **M2.5 — Supervision proof:** reach a stable checkpoint, emit a
@@ -376,8 +376,18 @@ The internal explicit-pump coordinator now proves Siming-backed semantic
 fingerprints, stable start identities, revision fencing, early handle capture,
 ambiguous-start reconnect without duplicate work, classified retry policy,
 provider-call accounting, duration/call/retry budgets, validated observation
-and result progression, and immutable terminal replay. Cancellation/resume
-remain in M2.4. See
+and result progression, immutable terminal replay, explicit cancellation, and
+waiting-operation resume. Cancellation is serialized by the per-runtime gate,
+uses durable caller idempotency keys, preserves nonterminal ambiguity for
+requested/rejected/unknown receipts, and bypasses exhausted ordinary work
+budgets when a safety cancellation call is required. Safety observation and
+cancellation calls remain bounded by an eight-call per-runtime ceiling and
+publish terminal `NeedsSupervisor` with an unresolved cancellation concern when
+that ceiling is exhausted; they do not publish an unrelated ordinary failure.
+Resume accepts only a known provider Waiting state, fences any rotated
+handle to the existing execution identity, keeps the original previous handle
+immutable, and observes a newly captured handle after an ambiguous lost receipt
+without issuing a duplicate resume call. See
 [ADR 0016](decisions/0016-siming-fingerprints-and-explicit-pump.md).
 
 Before the coordinator becomes public, combine acceptance and execution-state

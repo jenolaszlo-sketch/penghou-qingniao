@@ -36,6 +36,27 @@ The first built-in node generation is derived deterministically from the
 delegation ID. Reconstructing queued private state therefore cannot invent a
 different provider identity.
 
+M2.4 adds revision-fenced `CancelAsync` and `ResumeAsync` operations serialized
+by the runtime gate. Durable cancellation is explicit and idempotency-keyed;
+caller transport tokens never become cancellation intent. Queued cancellation
+publishes `Cancelled` without a provider call. Running cancellation validates
+the exact captured handle and receipt key, observes the same handle after
+requested, rejected, or ambiguous outcomes, and is allowed to make its safety
+call even after the ordinary worker or duration budget is exhausted. Safety
+observation and cancellation calls are bounded by the coordinator's internal
+`CancellationSafetyCallLimit` (currently 8 calls per runtime); exhausting that
+ceiling publishes the honest terminal `NeedsSupervisor` state with an unresolved
+cancellation concern rather than leaving a permanently `Running` snapshot or
+publishing an unrelated ordinary failure. Resume is limited to an observed
+provider `Waiting` state, preserves correlation, generation, and attempt
+identity, and permits only an execution-identity-fenced provider handle
+rotation captured before the resume receipt. The original previous handle is
+immutable for one resume request. If a rotated handle is captured and the
+receipt is lost, the capture is accepted ambiguity: the next exact replay
+observes the captured handle and never issues a second `ResumeAsync`. Resume
+retries without a rotated capture consume the normal worker/retry/duration
+budgets.
+
 ## Limits before a public coordinator
 
 - Acceptance and execution-state creation are not one atomic operation across
@@ -44,8 +65,8 @@ different provider identity.
   contract.
 - The fake slice does not yet publish the objective and constraints as an
   immutable provider input artifact.
-- Cancellation/resume, supervisor checkpoints, candidate sealing, independent
-  test/review, and bounded correction remain later Milestone 2 batches.
+- Supervisor checkpoints, candidate sealing, independent test/review, and
+  bounded correction remain later Milestone 2 batches.
 - Zhinu must own durable execution and recovery; this pump is not a replacement
   workflow runtime.
 

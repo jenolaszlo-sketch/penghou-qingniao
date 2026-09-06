@@ -19,6 +19,12 @@ internal sealed class InMemoryDelegationCoordinator
     private const string AgentProtocolVersion = "qingniao-inmemory-v1";
     private const string AgentCapability = "agent.execute";
 
+    // Cancellation observation and cancellation calls are safety work: they
+    // must still be possible after ordinary worker/duration budgets expire.
+    // They are nevertheless bounded so a provider that never reaches a
+    // terminal state cannot turn repeated pumps into an unbounded call loop.
+    internal const int CancellationSafetyCallLimit = 8;
+
     private readonly object stateGate = new();
     private readonly Dictionary<DelegationId, RuntimeState> states = new();
     private readonly SemaphoreSlim acceptanceGate = new(1, 1);
@@ -181,6 +187,335 @@ internal sealed class InMemoryDelegationCoordinator
         executionStore.GetAsync(delegationId, cancellationToken);
 
     /// <summary>
+    /// Requests durable cancellation at an expected observable revision. The
+    /// caller token only transports this operation; it is never interpreted as
+    /// a durable cancellation request.
+    /// </summary>
+    internal async ValueTask<DelegationExecutionSnapshot> CancelAsync(
+        DelegationId delegationId,
+        long expectedRevision,
+        string cancellationKey,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var runtime = GetRuntime(delegationId);
+        await runtime.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationKey = ExternalOperationCancellationValidation.RequireKey(cancellationKey);
+            reason = ExternalOperationCancellationValidation.RequireReason(reason);
+            var current = await executionStore.GetAsync(delegationId, cancellationToken).ConfigureAwait(false);
+            var replayingCancellation = runtime.CancellationKey is not null;
+            if (replayingCancellation)
+            {
+                if (!string.Equals(runtime.CancellationKey, cancellationKey, StringComparison.Ordinal)
+                    || !string.Equals(runtime.CancellationReason, reason, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "A delegation already has a different durable cancellation request.");
+                }
+
+                if (runtime.CancellationReceipt is not null
+                    || runtime.CancellationIntentOnly
+                    || DelegationLifecycle.IsTerminal(current.Progress.State))
+                {
+                    return current;
+                }
+            }
+
+            if (DelegationLifecycle.IsTerminal(current.Progress.State))
+            {
+                return current;
+            }
+
+            if (!replayingCancellation)
+            {
+                EnsureExpectedRevision(delegationId, current, expectedRevision);
+            }
+
+            runtime.CancellationKey = cancellationKey;
+            runtime.CancellationReason = reason;
+            if (current.Progress.State == DelegationState.Queued)
+            {
+                runtime.CancellationIntentOnly = false;
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Cancelled,
+                    "Cancellation was requested before provider execution began.",
+                    [],
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            if (runtime.Handle is null)
+            {
+                runtime.CancellationIntentOnly = true;
+                runtime.Phase = CoordinatorPhase.Start;
+                return current;
+            }
+
+            runtime.CancellationRequest = new ExternalOperationCancelRequest(
+                runtime.Handle,
+                cancellationKey,
+                reason);
+            runtime.CancellationIntentOnly = false;
+            return await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            runtime.Gate.Release();
+        }
+    }
+
+    /// <summary>Requests durable cancellation using an explicit provider request.</summary>
+    internal async ValueTask<DelegationExecutionSnapshot> CancelAsync(
+        DelegationId delegationId,
+        long expectedRevision,
+        ExternalOperationCancelRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
+        var runtime = GetRuntime(delegationId);
+        await runtime.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var current = await executionStore.GetAsync(delegationId, cancellationToken).ConfigureAwait(false);
+
+            // An explicit request carries a provider handle.  Validate its
+            // execution identity even while queued or terminal; otherwise a
+            // foreign handle could become a durable cancellation alias.
+            if (!HandleMatchesRuntime(runtime, request.Handle))
+            {
+                throw new InvalidOperationException(
+                    "A cancellation request must name a handle from this exact execution correlation.");
+            }
+
+            // Idempotent control replays are recognized before the caller's
+            // revision fence. A transport retry may arrive with an older
+            // cached revision after another observer has advanced the state.
+            var replayingCancellation = runtime.CancellationKey is not null;
+            if (replayingCancellation)
+            {
+                if (!string.Equals(runtime.CancellationKey, request.CancellationKey, StringComparison.Ordinal)
+                    || !string.Equals(runtime.CancellationReason, request.Reason, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "A delegation already has a different durable cancellation request.");
+                }
+
+                if (runtime.CancellationRequest is not null
+                    && !CancellationRequestsEqual(runtime.CancellationRequest, request))
+                {
+                    throw new InvalidOperationException(
+                        "A durable cancellation request cannot change its provider handle.");
+                }
+
+                if (runtime.CancellationReceipt is not null
+                    || runtime.CancellationIntentOnly
+                    || DelegationLifecycle.IsTerminal(current.Progress.State))
+                {
+                    return current;
+                }
+            }
+
+            if (DelegationLifecycle.IsTerminal(current.Progress.State))
+            {
+                return current;
+            }
+
+            if (!replayingCancellation)
+            {
+                EnsureExpectedRevision(delegationId, current, expectedRevision);
+            }
+
+            if (current.Progress.State == DelegationState.Queued)
+            {
+                runtime.CancellationRequest = request;
+                runtime.CancellationKey = request.CancellationKey;
+                runtime.CancellationReason = request.Reason;
+                runtime.CancellationIntentOnly = false;
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Cancelled,
+                    "Cancellation was requested before provider execution began.",
+                    [],
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            if (runtime.Handle is null)
+            {
+                // The start call may have been accepted before its response
+                // was lost. Preserve the cancellation identity and let the
+                // next fenced pump retry the exact StartIdentity to recover a
+                // handle; local state must remain non-terminal meanwhile.
+                runtime.CancellationRequest = null;
+                runtime.CancellationKey ??= request.CancellationKey;
+                runtime.CancellationReason ??= request.Reason;
+                runtime.CancellationIntentOnly = true;
+                runtime.Phase = CoordinatorPhase.Start;
+                return current;
+            }
+
+            if (request.Handle != runtime.Handle)
+            {
+                throw new InvalidOperationException(
+                    "A cancellation request must name the coordinator's exact captured handle.");
+            }
+
+            runtime.CancellationRequest = request;
+            runtime.CancellationKey = request.CancellationKey;
+            runtime.CancellationReason = request.Reason;
+            runtime.CancellationIntentOnly = false;
+            return await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            runtime.Gate.Release();
+        }
+    }
+
+    /// <summary>Resumes one observed waiting provider operation at a revision fence.</summary>
+    internal ValueTask<DelegationExecutionSnapshot> ResumeAsync(
+        DelegationId delegationId,
+        long expectedRevision,
+        string resumeKey,
+        IReadOnlyList<DelegationArtifactReference>? correctionArtifacts = null,
+        string? reason = null,
+        CancellationToken cancellationToken = default) =>
+        ResumeAsync(
+            delegationId,
+            expectedRevision,
+            new ExternalOperationResumeRequest(
+                ResolveResumeHandleForRequest(delegationId, resumeKey),
+                resumeKey,
+                correctionArtifacts,
+                reason),
+            cancellationToken);
+
+    /// <summary>Resumes one observed waiting provider operation.</summary>
+    internal async ValueTask<DelegationExecutionSnapshot> ResumeAsync(
+        DelegationId delegationId,
+        long expectedRevision,
+        ExternalOperationResumeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
+        var runtime = GetRuntime(delegationId);
+        await runtime.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var current = await executionStore.GetAsync(delegationId, cancellationToken).ConfigureAwait(false);
+            var replayingResume = runtime.ResumeRequest is not null;
+            if (replayingResume)
+            {
+                if (!ResumeRequestsEqual(runtime.ResumeRequest!, request))
+                {
+                    throw new InvalidOperationException(
+                        "A delegation already has a different durable resume request.");
+                }
+
+                if (runtime.ResumeReceipt is not null)
+                {
+                    return current;
+                }
+
+                // A provider may have captured a rotated handle and then
+                // lose the resume receipt.  The capture is durable evidence
+                // that the resume was accepted; observe that handle instead
+                // of issuing a second ResumeAsync call.
+                if (runtime.ResumeAcceptedAmbiguity)
+                {
+                    if (runtime.ResumeAmbiguityObserved)
+                    {
+                        return current;
+                    }
+
+                    runtime.ResumeAmbiguityObserved = true;
+                    runtime.Phase = CoordinatorPhase.Observe;
+                    return await PumpObserveAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (!replayingResume)
+            {
+                EnsureExpectedRevision(delegationId, current, expectedRevision);
+            }
+            if (DelegationLifecycle.IsTerminal(current.Progress.State))
+            {
+                return current;
+            }
+
+            if (runtime.Handle is null)
+            {
+                throw new InvalidOperationException(
+                    "A resume request requires a known captured provider handle.");
+            }
+
+            if (!replayingResume && request.Handle != runtime.Handle)
+            {
+                throw new InvalidOperationException(
+                    "A resume request must name the coordinator's exact captured handle.");
+            }
+
+            if (runtime.LastObservation?.State != ExternalOperationState.Waiting)
+            {
+                throw new InvalidOperationException(
+                    "This coordinator slice can resume only a known non-terminal provider Waiting state.");
+            }
+
+            if (!replayingResume)
+            {
+                runtime.ResumeRequest = request;
+                // This is immutable for the lifetime of the resume request.
+                // A provider may rotate the current handle before its receipt
+                // is received, but that does not change the request's
+                // previous-handle identity.
+                runtime.ResumePreviousHandle = runtime.Handle;
+            }
+
+            var durationExceeded = await EnforceDurationAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+            if (durationExceeded is not null)
+            {
+                return durationExceeded;
+            }
+
+            var retryingResume = runtime.ResumeAttempted;
+            if (current.Progress.WorkerCalls >= runtime.Request.Budget.MaximumWorkerCalls
+                || (retryingResume && current.Progress.Retries >= runtime.Request.Budget.MaximumRetries))
+            {
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Failed,
+                    "The provider resume retry budget was exhausted.",
+                    [],
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            runtime.ResumeAttempted = true;
+            current = await PublishRunningAsync(
+                runtime,
+                current,
+                checked(current.Progress.WorkerCalls + 1),
+                retryingResume ? checked(current.Progress.Retries + 1) : current.Progress.Retries,
+                cancellationToken).ConfigureAwait(false);
+
+            return await ResumeKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            runtime.Gate.Release();
+        }
+    }
+
+    /// <summary>
     /// Advances exactly one logical operation after an expected revision. A
     /// stale revision is rejected so concurrent callers cannot silently pump
     /// the same execution twice.
@@ -230,6 +565,14 @@ internal sealed class InMemoryDelegationCoordinator
     {
         if (runtime.Adapter is null)
         {
+            // A pending cancellation cannot be completed without an
+            // executable adapter. Keep the non-terminal intent observable;
+            // do not misreport it as an ordinary provider failure.
+            if (IsCancellationPending(runtime))
+            {
+                return current;
+            }
+
             runtime.Phase = CoordinatorPhase.Complete;
             return await PublishTerminalAsync(
                 runtime,
@@ -240,10 +583,15 @@ internal sealed class InMemoryDelegationCoordinator
                 cancellationToken).ConfigureAwait(false);
         }
 
-        var durationExceeded = await EnforceDurationAsync(runtime, current, cancellationToken).ConfigureAwait(false);
-        if (durationExceeded is not null)
+        var pendingCancellation = runtime.CancellationRequest is not null
+            || runtime.CancellationKey is not null;
+        if (!pendingCancellation)
         {
-            return durationExceeded;
+            var durationExceeded = await EnforceDurationAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+            if (durationExceeded is not null)
+            {
+                return durationExceeded;
+            }
         }
 
         if (current.Progress.State == DelegationState.Queued)
@@ -258,6 +606,16 @@ internal sealed class InMemoryDelegationCoordinator
         else if (current.Progress.WorkerCalls >= runtime.Request.Budget.MaximumWorkerCalls
             || current.Progress.Retries >= runtime.Request.Budget.MaximumRetries)
         {
+            if (pendingCancellation)
+            {
+                // Recovery of an accepted start is ordinary work, but a
+                // cancellation intent must not be converted into an
+                // unrelated Failed terminal result merely because recovery
+                // has reached its ordinary budget.
+                runtime.Phase = CoordinatorPhase.Start;
+                return current;
+            }
+
             runtime.Phase = CoordinatorPhase.Complete;
             return await PublishTerminalAsync(
                 runtime,
@@ -295,10 +653,18 @@ internal sealed class InMemoryDelegationCoordinator
             {
                 runtime.Handle = capture.Handle;
                 runtime.Phase = CoordinatorPhase.Observe;
-                return current;
+                return pendingCancellation
+                    ? await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false)
+                    : current;
             }
 
             if (exception.Failure.Retryable)
+            {
+                runtime.Phase = CoordinatorPhase.Start;
+                return current;
+            }
+
+            if (pendingCancellation)
             {
                 runtime.Phase = CoordinatorPhase.Start;
                 return current;
@@ -319,6 +685,14 @@ internal sealed class InMemoryDelegationCoordinator
             {
                 runtime.Handle = capture.Handle;
                 runtime.Phase = CoordinatorPhase.Observe;
+                return pendingCancellation
+                    ? await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false)
+                    : current;
+            }
+
+            if (pendingCancellation)
+            {
+                runtime.Phase = CoordinatorPhase.Start;
                 return current;
             }
 
@@ -344,7 +718,9 @@ internal sealed class InMemoryDelegationCoordinator
             await CaptureReturnedHandleAsync(receipt, cancellationToken).ConfigureAwait(false);
             runtime.Handle = receipt.Handle;
             runtime.Phase = CoordinatorPhase.Observe;
-            return current;
+            return pendingCancellation
+                ? await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false)
+                : current;
         }
         catch (OperationCanceledException)
         {
@@ -352,6 +728,21 @@ internal sealed class InMemoryDelegationCoordinator
         }
         catch (Exception)
         {
+            if (pendingCancellation
+                && handleRegistry.TryGet(runtime.Correlation, out var recovered)
+                && recovered is not null)
+            {
+                runtime.Handle = recovered.Handle;
+                runtime.Phase = CoordinatorPhase.Observe;
+                return await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (pendingCancellation)
+            {
+                runtime.Phase = CoordinatorPhase.Start;
+                return current;
+            }
+
             runtime.Phase = CoordinatorPhase.Complete;
             return await PublishTerminalAsync(
                 runtime,
@@ -381,13 +772,17 @@ internal sealed class InMemoryDelegationCoordinator
             return current;
         }
 
-        var durationExceeded = await EnforceDurationAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+        var pendingCancellation = IsCancellationPending(runtime);
+        var durationExceeded = pendingCancellation
+            ? null
+            : await EnforceDurationAsync(runtime, current, cancellationToken).ConfigureAwait(false);
         if (durationExceeded is not null)
         {
             return durationExceeded;
         }
 
-        if (current.Progress.WorkerCalls >= runtime.Request.Budget.MaximumWorkerCalls)
+        if (!pendingCancellation
+            && current.Progress.WorkerCalls >= runtime.Request.Budget.MaximumWorkerCalls)
         {
             runtime.Phase = CoordinatorPhase.Complete;
             return await PublishTerminalAsync(
@@ -396,6 +791,14 @@ internal sealed class InMemoryDelegationCoordinator
                 DelegationState.Failed,
                 "The worker-call budget was exhausted before observation.",
                 [],
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (pendingCancellation && !TryReserveCancellationSafetyCall(runtime))
+        {
+            return await PublishCancellationNeedsSupervisorAsync(
+                runtime,
+                current,
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -410,6 +813,12 @@ internal sealed class InMemoryDelegationCoordinator
         }
         catch (ExternalOperationProviderException exception)
         {
+            if (pendingCancellation)
+            {
+                runtime.Phase = CoordinatorPhase.Observe;
+                return current;
+            }
+
             if (exception.Failure.Retryable)
             {
                 return await RetryTransportAsync(runtime, current, CoordinatorPhase.Observe,
@@ -423,6 +832,12 @@ internal sealed class InMemoryDelegationCoordinator
         }
         catch
         {
+            if (pendingCancellation)
+            {
+                runtime.Phase = CoordinatorPhase.Observe;
+                return current;
+            }
+
             runtime.Phase = CoordinatorPhase.Complete;
             return await PublishTerminalAsync(runtime, current, DelegationState.Failed,
                 UnclassifiedFailureSummary("observation"), [], cancellationToken,
@@ -474,6 +889,28 @@ internal sealed class InMemoryDelegationCoordinator
                 ?? $"The provider reported external operation state '{observation.State}'.";
             return await PublishTerminalAsync(runtime, current, state, summary, [], cancellationToken, current.Progress.WorkerCalls + 1)
                 .ConfigureAwait(false);
+        }
+
+        if (pendingCancellation)
+        {
+            // A rejected, unknown, or merely requested cancellation is not a
+            // terminal coordinator outcome. Once observation reaches a
+            // provider terminal state, however, that observed state is the
+            // source of truth and must be allowed to complete normally. In
+            // particular, Succeeded must proceed to result retrieval instead
+            // of replaying the cancellation request forever.
+            if (observation.State == ExternalOperationState.Succeeded)
+            {
+                runtime.Phase = CoordinatorPhase.GetResult;
+                return await PublishRunningAsync(
+                    runtime,
+                    current,
+                    workerCalls: current.Progress.WorkerCalls + 1,
+                    retries: current.Progress.Retries,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            return await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false);
         }
 
         runtime.Phase = observation.ResultAvailable || observation.State == ExternalOperationState.Succeeded
@@ -632,6 +1069,263 @@ internal sealed class InMemoryDelegationCoordinator
             cancellationToken).ConfigureAwait(false);
     }
 
+    private async ValueTask<DelegationExecutionSnapshot> CancelKnownHandleAsync(
+        RuntimeState runtime,
+        DelegationExecutionSnapshot current,
+        CancellationToken cancellationToken)
+    {
+        runtime.CancellationRequest ??= new ExternalOperationCancelRequest(
+            runtime.Handle!,
+            runtime.CancellationKey!,
+            runtime.CancellationReason!);
+        if (runtime.CancellationRequest.Handle != runtime.Handle)
+        {
+            runtime.Phase = CoordinatorPhase.Observe;
+            return current;
+        }
+        if (runtime.CancellationReceipt is not null)
+        {
+            return await ReconcileCancellationReceiptAsync(
+                runtime,
+                current,
+                runtime.CancellationReceipt,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!TryReserveCancellationSafetyCall(runtime))
+        {
+            return await PublishCancellationNeedsSupervisorAsync(
+                runtime,
+                current,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        runtime.CancellationIntentOnly = false;
+        runtime.CancellationAttempted = true;
+        current = await PublishRunningAsync(
+            runtime,
+            current,
+            checked(current.Progress.WorkerCalls + 1),
+            current.Progress.Retries,
+            cancellationToken).ConfigureAwait(false);
+
+        ExternalOperationCancellationReceipt receipt;
+        try
+        {
+            receipt = await runtime.Adapter!.CancelAsync(
+            new ExternalOperationCancelRequest(
+                runtime.Handle!,
+                    runtime.CancellationRequest!.CancellationKey,
+                    runtime.CancellationRequest.Reason),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ExternalOperationProviderException)
+        {
+            // Cancellation failures are non-terminal: the coordinator must
+            // continue observing the same handle. The provider exception is
+            // deliberately not copied into durable result text.
+            runtime.Phase = CoordinatorPhase.Observe;
+            return current;
+        }
+        catch
+        {
+            runtime.Phase = CoordinatorPhase.Observe;
+            return current;
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(receipt);
+            if (receipt.Handle != runtime.Handle
+                || !string.Equals(
+                    receipt.CancellationKey,
+                    runtime.CancellationRequest.CancellationKey,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("The provider cancellation receipt did not match the exact request.");
+            }
+
+            runtime.CancellationReceipt = receipt;
+        }
+        catch
+        {
+            runtime.Phase = CoordinatorPhase.Observe;
+            return current;
+        }
+
+        return await ReconcileCancellationReceiptAsync(
+            runtime,
+            current,
+            receipt,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<DelegationExecutionSnapshot> ReconcileCancellationReceiptAsync(
+        RuntimeState runtime,
+        DelegationExecutionSnapshot current,
+        ExternalOperationCancellationReceipt receipt,
+        CancellationToken cancellationToken)
+    {
+        switch (receipt.Disposition)
+        {
+            case ExternalOperationCancellationDisposition.ConfirmedCancelled:
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Cancelled,
+                    "The provider confirmed cancellation.",
+                    [],
+                    cancellationToken).ConfigureAwait(false);
+
+            case ExternalOperationCancellationDisposition.AlreadyTerminal:
+                switch (receipt.State)
+                {
+                    case ExternalOperationState.Cancelled:
+                        runtime.Phase = CoordinatorPhase.Complete;
+                        return await PublishTerminalAsync(
+                            runtime,
+                            current,
+                            DelegationState.Cancelled,
+                            "The provider reported the operation was already cancelled.",
+                            [],
+                            cancellationToken).ConfigureAwait(false);
+                    case ExternalOperationState.Succeeded:
+                        runtime.Phase = CoordinatorPhase.GetResult;
+                        return current;
+                    default:
+                        runtime.Phase = CoordinatorPhase.Complete;
+                        return await PublishTerminalAsync(
+                            runtime,
+                            current,
+                            DelegationState.Failed,
+                            "The provider reported the operation was already terminal.",
+                            [],
+                            cancellationToken).ConfigureAwait(false);
+                }
+
+            case ExternalOperationCancellationDisposition.Requested:
+            case ExternalOperationCancellationDisposition.Rejected:
+            case ExternalOperationCancellationDisposition.Unknown:
+                runtime.Phase = CoordinatorPhase.Observe;
+                return current;
+            default:
+                throw new InvalidOperationException("The provider returned an unknown cancellation disposition.");
+        }
+    }
+
+    private async ValueTask<DelegationExecutionSnapshot> ResumeKnownHandleAsync(
+        RuntimeState runtime,
+        DelegationExecutionSnapshot current,
+        CancellationToken cancellationToken)
+    {
+        if (runtime.ResumeReceipt is not null)
+        {
+            return current;
+        }
+
+        var previousHandle = runtime.ResumePreviousHandle ?? runtime.Handle!;
+        ExternalOperationResumeReceipt receipt;
+        try
+        {
+            receipt = await runtime.Adapter!.ResumeAsync(
+                runtime.ResumeRequest!,
+                new ResumeHandleCaptureSink(this, runtime, previousHandle),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // A lost resume response is ambiguous.  If the provider captured
+            // a new handle first, that capture is durable acceptance evidence
+            // and the next exact replay must observe it instead of calling
+            // ResumeAsync again.  With no rotated capture, a bounded retry is
+            // still allowed and consumes the normal resume budgets.
+            if (runtime.ResumePreviousHandle is not null
+                && runtime.Handle != runtime.ResumePreviousHandle)
+            {
+                runtime.ResumeAcceptedAmbiguity = true;
+                runtime.ResumeAmbiguityObserved = false;
+            }
+
+            runtime.Phase = CoordinatorPhase.Observe;
+            return current;
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(receipt);
+            if (receipt.PreviousHandle != previousHandle
+                || !string.Equals(receipt.ResumeKey, runtime.ResumeRequest!.ResumeKey, StringComparison.Ordinal)
+                || ExternalOperationExecutionKey.Create(receipt.Handle.Correlation)
+                    != ExternalOperationExecutionKey.Create(runtime.Correlation))
+            {
+                throw new InvalidOperationException("The provider resume receipt did not match the exact request.");
+            }
+
+            var rotated = runtime.Handle != receipt.Handle;
+            if (rotated)
+            {
+                await handleRegistry.RotateAsync(
+                    runtime.Handle!,
+                    new ExternalOperationHandleCapture(receipt.Handle, receipt.AcceptedAt),
+                    cancellationToken).ConfigureAwait(false);
+                runtime.Handle = receipt.Handle;
+            }
+
+            runtime.ResumeReceipt = receipt;
+            runtime.ResumeAcceptedAmbiguity = false;
+            runtime.ResumeAmbiguityObserved = false;
+            if (rotated)
+            {
+                runtime.LastObservation = null;
+            }
+        }
+        catch
+        {
+            if (runtime.ResumePreviousHandle is not null
+                && runtime.Handle != runtime.ResumePreviousHandle)
+            {
+                runtime.ResumeAcceptedAmbiguity = true;
+                runtime.ResumeAmbiguityObserved = false;
+            }
+
+            runtime.Phase = CoordinatorPhase.Observe;
+            return current;
+        }
+
+        runtime.Phase = receipt.State == ExternalOperationState.Succeeded
+            ? CoordinatorPhase.GetResult
+            : CoordinatorPhase.Observe;
+        if (receipt.State is ExternalOperationState.Cancelled
+            or ExternalOperationState.Failed
+            or ExternalOperationState.TimedOut
+            or ExternalOperationState.Rejected)
+        {
+            runtime.Phase = CoordinatorPhase.Complete;
+            return await PublishTerminalAsync(
+                runtime,
+                current,
+                receipt.State == ExternalOperationState.Cancelled
+                    ? DelegationState.Cancelled
+                    : DelegationState.Failed,
+                receipt.State == ExternalOperationState.Cancelled
+                    ? "The provider reported the resumed operation was cancelled."
+                    : "The provider reported the resumed operation was terminal.",
+                [],
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        return current;
+    }
+
     private async ValueTask<DelegationExecutionSnapshot> PublishRunningAsync(
         RuntimeState runtime,
         DelegationExecutionSnapshot current,
@@ -691,6 +1385,18 @@ internal sealed class InMemoryDelegationCoordinator
             cancellationToken).ConfigureAwait(false);
     }
 
+    private ValueTask<DelegationExecutionSnapshot> PublishCancellationNeedsSupervisorAsync(
+        RuntimeState runtime,
+        DelegationExecutionSnapshot current,
+        CancellationToken cancellationToken) =>
+        PublishTerminalAsync(
+            runtime,
+            current,
+            DelegationState.NeedsSupervisor,
+            "Cancellation remains unresolved after the coordinator safety observation ceiling.",
+            [],
+            cancellationToken);
+
     private async ValueTask CaptureReturnedHandleAsync(
         ExternalOperationStartReceipt receipt,
         CancellationToken cancellationToken)
@@ -708,6 +1414,81 @@ internal sealed class InMemoryDelegationCoordinator
                 ? runtime
                 : throw new DelegationCoordinatorStateUnavailableException(delegationId);
         }
+    }
+
+    private ExternalOperationHandle ResolveResumeHandleForRequest(
+        DelegationId delegationId,
+        string resumeKey)
+    {
+        var runtime = GetRuntime(delegationId);
+        if (runtime.ResumeRequest is not null
+            && string.Equals(runtime.ResumeRequest.ResumeKey, resumeKey, StringComparison.Ordinal))
+        {
+            return runtime.ResumeRequest.Handle;
+        }
+
+        return runtime.Handle
+            ?? throw new InvalidOperationException(
+                "A resume request requires a known captured external handle.");
+    }
+
+    private static void EnsureExpectedRevision(
+        DelegationId delegationId,
+        DelegationExecutionSnapshot current,
+        long expectedRevision)
+    {
+        if (current.Progress.Revision != expectedRevision)
+        {
+            throw new DelegationExecutionStaleException(
+                delegationId,
+                current.Progress.Revision,
+                expectedRevision);
+        }
+    }
+
+    private static bool CancellationRequestsEqual(
+        ExternalOperationCancelRequest left,
+        ExternalOperationCancelRequest right) =>
+        left.Handle == right.Handle
+        && string.Equals(left.CancellationKey, right.CancellationKey, StringComparison.Ordinal)
+        && string.Equals(left.Reason, right.Reason, StringComparison.Ordinal);
+
+    private static bool ResumeRequestsEqual(
+        ExternalOperationResumeRequest left,
+        ExternalOperationResumeRequest right) =>
+        left.Handle == right.Handle
+        && string.Equals(left.ResumeKey, right.ResumeKey, StringComparison.Ordinal)
+        && string.Equals(left.Reason, right.Reason, StringComparison.Ordinal)
+        && left.CorrectionArtifacts.SequenceEqual(right.CorrectionArtifacts);
+
+    private static bool HandleMatchesRuntime(RuntimeState runtime, ExternalOperationHandle handle)
+    {
+        try
+        {
+            var requestKey = ExternalOperationExecutionKey.Create(handle.Correlation);
+            var runtimeKey = ExternalOperationExecutionKey.Create(runtime.Correlation);
+            return requestKey == runtimeKey
+                && string.Equals(handle.Provider, runtime.Correlation.Agent.Provider, StringComparison.Ordinal)
+                && string.Equals(handle.ProtocolVersion, runtime.Correlation.Agent.ProtocolVersion, StringComparison.Ordinal);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsCancellationPending(RuntimeState runtime) =>
+        runtime.CancellationKey is not null;
+
+    private static bool TryReserveCancellationSafetyCall(RuntimeState runtime)
+    {
+        if (runtime.CancellationSafetyCalls >= CancellationSafetyCallLimit)
+        {
+            return false;
+        }
+
+        runtime.CancellationSafetyCalls++;
+        return true;
     }
 
     private DateTimeOffset RequireNow()
@@ -778,6 +1559,47 @@ internal sealed class InMemoryDelegationCoordinator
         Observe,
         GetResult,
         Complete,
+    }
+
+    private sealed class ResumeHandleCaptureSink(
+        InMemoryDelegationCoordinator owner,
+        RuntimeState runtime,
+        ExternalOperationHandle expectedHandle) : IExternalOperationHandleCaptureSink
+    {
+        public ValueTask CaptureAsync(
+            ExternalOperationHandleCapture capture,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(capture);
+            return owner.CaptureResumedHandleAsync(runtime, expectedHandle, capture, cancellationToken);
+        }
+    }
+
+    private async ValueTask CaptureResumedHandleAsync(
+        RuntimeState runtime,
+        ExternalOperationHandle expectedHandle,
+        ExternalOperationHandleCapture capture,
+        CancellationToken cancellationToken)
+    {
+        // The request's previous handle is immutable.  A provider callback
+        // may arrive after another callback has already rotated the current
+        // handle, but it still must prove the original binding.
+        if (runtime.ResumePreviousHandle is null
+            || runtime.ResumePreviousHandle != expectedHandle)
+        {
+            throw new InvalidOperationException(
+                "A resumed handle capture must match the immutable previous handle.");
+        }
+
+        var rotated = runtime.Handle != capture.Handle;
+        await handleRegistry.RotateAsync(expectedHandle, capture, cancellationToken).ConfigureAwait(false);
+        runtime.Handle = capture.Handle;
+        if (rotated)
+        {
+            runtime.LastObservation = null;
+            runtime.ResumeAcceptedAmbiguity = true;
+            runtime.ResumeAmbiguityObserved = false;
+        }
     }
 
     private sealed class RuntimeState
@@ -864,5 +1686,18 @@ internal sealed class InMemoryDelegationCoordinator
         internal ExternalOperationStartRequest? StartRequest { get; }
         internal ExternalOperationHandle? Handle { get; set; }
         internal ExternalOperationObservation? LastObservation { get; set; }
+        internal ExternalOperationCancelRequest? CancellationRequest { get; set; }
+        internal string? CancellationKey { get; set; }
+        internal string? CancellationReason { get; set; }
+        internal ExternalOperationCancellationReceipt? CancellationReceipt { get; set; }
+        internal bool CancellationIntentOnly { get; set; }
+        internal bool CancellationAttempted { get; set; }
+        internal int CancellationSafetyCalls { get; set; }
+        internal ExternalOperationResumeRequest? ResumeRequest { get; set; }
+        internal ExternalOperationResumeReceipt? ResumeReceipt { get; set; }
+        internal ExternalOperationHandle? ResumePreviousHandle { get; set; }
+        internal bool ResumeAttempted { get; set; }
+        internal bool ResumeAcceptedAmbiguity { get; set; }
+        internal bool ResumeAmbiguityObserved { get; set; }
     }
 }

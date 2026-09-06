@@ -199,6 +199,68 @@ public sealed class InMemoryExternalOperationHandleCaptureRegistry : IExternalOp
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Atomically replaces the current handle for one already captured
+    /// execution attempt. This is intentionally narrower than
+    /// <see cref="CaptureAsync"/>: the caller must provide the handle that is
+    /// currently bound to the execution, so an unrelated operation cannot
+    /// rebind the execution identity during provider resume.
+    /// </summary>
+    internal ValueTask RotateAsync(
+        ExternalOperationHandle expectedHandle,
+        ExternalOperationHandleCapture capture,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(expectedHandle);
+        ArgumentNullException.ThrowIfNull(capture);
+        expectedHandle.Validate();
+        capture.Handle.Validate();
+
+        var executionKey = ExternalOperationExecutionKey.Create(capture.Handle.Correlation);
+        var expectedExecutionKey = ExternalOperationExecutionKey.Create(expectedHandle.Correlation);
+        if (executionKey != expectedExecutionKey)
+        {
+            throw Conflict(ExternalOperationHandleCaptureConflictKind.ExecutionIdentity);
+        }
+
+        var expectedHandleKey = new ExternalOperationHandleKey(expectedHandle.Provider, expectedHandle.Value);
+        var newHandleKey = new ExternalOperationHandleKey(capture.Handle.Provider, capture.Handle.Value);
+
+        lock (_gate)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_byExecution.TryGetValue(executionKey, out var existing)
+                || !HandlesEqual(existing.Handle, expectedHandle))
+            {
+                throw Conflict(ExternalOperationHandleCaptureConflictKind.ExecutionIdentity);
+            }
+
+            if (HandlesEqual(existing.Handle, capture.Handle))
+            {
+                if (capture.CapturedAt < existing.CapturedAt)
+                {
+                    _byExecution[executionKey] = capture;
+                    _byHandle[newHandleKey] = capture;
+                }
+
+                return ValueTask.CompletedTask;
+            }
+
+            if (_byHandle.TryGetValue(newHandleKey, out var owner)
+                && !ReferenceEquals(owner, existing))
+            {
+                throw Conflict(ExternalOperationHandleCaptureConflictKind.ReusedHandle);
+            }
+
+            _byHandle.Remove(expectedHandleKey);
+            _byExecution[executionKey] = capture;
+            _byHandle[newHandleKey] = capture;
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
     /// <summary>Looks up a capture by its stable execution correlation and attempt.</summary>
     public bool TryGet(
         ExternalOperationCorrelation correlation,
