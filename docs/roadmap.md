@@ -314,7 +314,7 @@ provider-specific UI.
 
 ## Milestone 2 — In-memory supervision vertical slice
 
-Status: **in progress — M2.1 through M2.6 complete**
+Status: **in progress — M2.1 through M2.7 complete**
 
 Implementation is split into dependency-ordered, independently reviewable
 batches. This slice is an in-memory coordinator over the frozen contracts; it
@@ -339,8 +339,11 @@ Zhinu durability.
 6. **M2.6 — Candidate and evidence proof (complete):** seal one candidate before parallel
    deterministic Test and independent Review, both against the exact immutable
    candidate revision.
-7. **M2.7 — Bounded correction:** evaluate the independent outcomes and allow
-   at most one semantic fix using a new `NodeGeneration` and candidate revision.
+7. **M2.7 — Bounded correction (complete):** evaluate explicit deterministic
+   validation failure or review rejection and allow at most one semantic fix
+   through a fresh `NodeGeneration` and candidate revision. Preserve the
+   original candidate and evidence immutably, publish the corrected candidate
+   before a fresh evaluator pair, and retain deterministic validation authority.
 8. **M2.8 — Outcome matrix:** aggregate immutable evidence and cover success,
    rejection, cancellation, budget exhaustion, provider error,
    `NeedsSupervisor`, and planned waiting.
@@ -355,7 +358,7 @@ Provider capability claims are selection input, not authorization. Wake hints
 never resume work or extend authority, reconnect never creates a new semantic
 generation, and deterministic validation cannot be overridden by model review.
 
-M2.1 through M2.6 are implemented and verified. Planless requests are bound to the same v2 identity as explicit
+M2.1 through M2.7 are implemented and verified. Planless requests are bound to the same v2 identity as explicit
 `Implement/1` requests; the fixed definition encodes one conditional repair
 without becoming a caller-authored graph. Provider registration is bounded,
 immutable, and host-authorized; selection uses one revisioned snapshot and an
@@ -410,6 +413,22 @@ accepted `Approve` may create or apply a pending resume intent. Each later
 provider waiting episode receives a fresh checkpoint ID, and wake hints expire
 after a bounded interval and are absent outside their exact active wait.
 
+M2.7 adds one-shot semantic correction without reopening or mutating the first
+publication. A correction request carries the immutable source candidate,
+initial findings, a stable idempotency key, and a target generation/revision;
+the accepted result must preserve delegation, node, and `CandidateId`, advance
+the revision exactly once, own fresh artifacts, and prove an exact fresh
+implementation correlation. Correction and evaluator work are memoized per
+runtime and run outside the gate on durable cancellation sources, while caller
+transport cancellation cannot poison shared work. Only explicit validation or
+review outcomes are correction-eligible: evaluator faults, missing evidence,
+invalid corrected output, and second-cycle failures remain terminal without a
+second fix. Cancellation prevents late correction publication, terminal
+evidence is rebuilt from all evidence recorded so far, and worker-call
+accounting derives from configured evaluators and actual started calls. The
+M2.7 coordinator proof and regression suite pass 372 tests on each target
+framework (`net8.0` and `net10.0`).
+
 Before the coordinator becomes public, combine acceptance and execution-state
 initialization under one atomic authority, bound its retained state, publish the
 actual delegated objective as an immutable input artifact, and introduce
@@ -428,7 +447,7 @@ provider name.
       handle.
 - [x] Seal a candidate revision before parallel Test and Review.
 - [x] Evaluate deterministic test results separately from reviewer judgment.
-- [ ] Support one bounded fix cycle.
+- [x] Support one bounded fix cycle.
 - [x] Aggregate a concise immutable result for the external-operation proof
       and the sealed candidate/test/review evidence bundle.
 - [ ] Cover success, rejection, cancellation, budget exhaustion, worker error,
