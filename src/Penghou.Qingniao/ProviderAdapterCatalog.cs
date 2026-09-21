@@ -1,7 +1,7 @@
 namespace Penghou.Qingniao;
 
 /// <summary>Describes the outcome of an executable provider-adapter lookup.</summary>
-internal enum ProviderAdapterLookupStatus
+public enum ProviderAdapterLookupStatus
 {
     /// <summary>The requested provider identity is registered and executable.</summary>
     Found = 0,
@@ -18,7 +18,7 @@ internal enum ProviderAdapterLookupStatus
 /// <see cref="Status"/> before using <see cref="Adapter"/>; a missing or
 /// unauthorized result never authorizes an adapter.
 /// </summary>
-internal sealed class ProviderAdapterLookupResult
+public sealed class ProviderAdapterLookupResult
 {
     private ProviderAdapterLookupResult(
         ProviderAdapterLookupStatus status,
@@ -88,7 +88,7 @@ internal sealed class ProviderAdapterLookupResult
 }
 
 /// <summary>Raised when an executable adapter identity cannot be registered.</summary>
-internal sealed class ProviderAdapterRegistrationConflictException : InvalidOperationException
+public sealed class ProviderAdapterRegistrationConflictException : InvalidOperationException
 {
     /// <summary>Initializes a conflict for one provider identity.</summary>
     public ProviderAdapterRegistrationConflictException(
@@ -119,7 +119,7 @@ internal sealed class ProviderAdapterRegistrationConflictException : InvalidOper
 /// Safe metadata for one executable provider-adapter registration. The
 /// executable adapter and descriptor are intentionally absent from this type.
 /// </summary>
-internal sealed class ProviderAdapterCatalogEntry
+public sealed class ProviderAdapterCatalogEntry
 {
     internal ProviderAdapterCatalogEntry(string provider, long revision)
     {
@@ -135,7 +135,7 @@ internal sealed class ProviderAdapterCatalogEntry
 }
 
 /// <summary>Describes the result of adding or replaying an executable adapter.</summary>
-internal sealed class ProviderAdapterRegistration
+public sealed class ProviderAdapterRegistration
 {
     internal ProviderAdapterRegistration(string provider, bool isNew, long revision)
     {
@@ -155,7 +155,7 @@ internal sealed class ProviderAdapterRegistration
 }
 
 /// <summary>Immutable, deterministic point-in-time view of executable adapters.</summary>
-internal sealed class ProviderAdapterCatalogSnapshot
+public sealed class ProviderAdapterCatalogSnapshot
 {
     internal ProviderAdapterCatalogSnapshot(
         IReadOnlyList<ProviderAdapterCatalogEntry> entries,
@@ -187,7 +187,7 @@ internal sealed class ProviderAdapterCatalogSnapshot
 /// instance is the revocation mechanism for this in-memory proof; durable
 /// generation fencing is deferred to a later persistence boundary.
 /// </summary>
-internal sealed class InMemoryExternalOperationProviderCatalog
+public sealed class InMemoryExternalOperationProviderCatalog
 {
     /// <summary>The largest capacity accepted by this bounded catalog.</summary>
     public const int MaximumEntries = 128;

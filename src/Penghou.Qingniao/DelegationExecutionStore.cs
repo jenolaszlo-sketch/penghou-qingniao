@@ -32,7 +32,7 @@ internal sealed class DelegationExecutionNotFoundException : KeyNotFoundExceptio
 }
 
 /// <summary>Raised when an update carries a revision older than the stored snapshot.</summary>
-internal sealed class DelegationExecutionStaleException : InvalidOperationException
+public sealed class DelegationExecutionStaleException : InvalidOperationException
 {
     internal DelegationExecutionStaleException(
         DelegationId delegationId,
@@ -73,7 +73,7 @@ internal sealed class DelegationExecutionConflictException : InvalidOperationExc
 }
 
 /// <summary>Immutable point-in-time state of one delegation execution.</summary>
-internal sealed class DelegationExecutionSnapshot
+public sealed class DelegationExecutionSnapshot
 {
     internal DelegationExecutionSnapshot(DelegationProgress progress, DelegationResult? result)
     {
@@ -83,8 +83,11 @@ internal sealed class DelegationExecutionSnapshot
         Result = result;
     }
 
-    internal DelegationProgress Progress { get; }
-    internal DelegationResult? Result { get; }
+    /// <summary>Gets the observable execution progress.</summary>
+    public DelegationProgress Progress { get; }
+
+    /// <summary>Gets the terminal result, or <see langword="null"/> while the delegation is not terminal.</summary>
+    public DelegationResult? Result { get; }
 }
 
 /// <summary>

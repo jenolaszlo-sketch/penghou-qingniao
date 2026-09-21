@@ -117,3 +117,109 @@ Penghou.Qingniao.CandidateVerificationInput.WorkerCallsConsumed.get -> int
 Penghou.Qingniao.CandidateVerificationInput.WorkerCallsConsumed.init -> void
 Penghou.Qingniao.CandidateVerificationInput.MaximumWorkerCalls.get -> int
 Penghou.Qingniao.CandidateVerificationInput.MaximumWorkerCalls.init -> void
+Penghou.Qingniao.DelegationRuntime
+Penghou.Qingniao.DelegationRuntime.DelegationRuntime(Penghou.Qingniao.IDelegationAcceptanceRegistry! acceptanceRegistry, Penghou.Qingniao.IDelegationAdmissionVerifier? admissionVerifier, Penghou.Qingniao.IProviderRegistry! providerRegistry, Penghou.Qingniao.InMemoryExternalOperationProviderCatalog! adapterCatalog, Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier? fingerprintVerifier = null, System.Func<System.DateTimeOffset>? now = null, Penghou.Qingniao.ISupervisorContextProvider? contextProvider = null, Penghou.Qingniao.ISupervisorInterventionAcceptanceRegistry? interventionRegistry = null, Penghou.Qingniao.ICandidateRevisionPublicationRegistry? candidateRegistry = null, Penghou.Qingniao.IDeterministicCandidateValidator? candidateValidator = null, Penghou.Qingniao.IIndependentCandidateReviewer? candidateReviewer = null, Penghou.Qingniao.ICandidateCorrector? candidateCorrector = null, Penghou.Qingniao.ICandidateVerificationPolicy? verificationPolicy = null) -> void
+Penghou.Qingniao.DelegationRuntime.DelegateAsync(Penghou.Qingniao.DelegationCallerScope! caller, Penghou.Qingniao.DelegationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationHandle!>!
+Penghou.Qingniao.DelegationRuntime.GetStatusAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationProgress?>!
+Penghou.Qingniao.DelegationRuntime.GetResultAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationResult?>!
+Penghou.Qingniao.DelegationRuntime.CancelAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Penghou.Qingniao.DelegationRuntime.AcceptAsync(Penghou.Qingniao.DelegationCallerScope! caller, Penghou.Qingniao.DelegationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationAcceptance!>
+Penghou.Qingniao.DelegationRuntime.GetAsync(Penghou.Qingniao.DelegationId delegationId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationExecutionSnapshot!>
+Penghou.Qingniao.DelegationRuntime.PumpAsync(Penghou.Qingniao.DelegationId delegationId, long expectedRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationExecutionSnapshot!>
+Penghou.Qingniao.DelegationRuntime.ResumeAsync(Penghou.Qingniao.DelegationId delegationId, long expectedRevision, string! resumeKey, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>? correctionArtifacts = null, string? reason = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationExecutionSnapshot!>
+Penghou.Qingniao.DelegationRuntime.ActivateCheckpointAsync(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.SupervisorIdentity! supervisor, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.DelegationRuntime.GetWakeHintAsync(Penghou.Qingniao.DelegationId delegationId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.WakeHint?>
+Penghou.Qingniao.DelegationRuntime.GetContextAsync(Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.SupervisorContextRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.SupervisorContextPackage!>
+Penghou.Qingniao.DelegationRuntime.InterveneAsync(Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.SupervisorIntervention! intervention, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationExecutionSnapshot!>
+Penghou.Qingniao.DelegationRuntime.ApplyInterventionAsync(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.SupervisorIdentity! supervisor, Penghou.Qingniao.SupervisorIntervention! intervention, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationExecutionSnapshot!>
+Penghou.Qingniao.DelegationExecutionSnapshot
+Penghou.Qingniao.DelegationExecutionSnapshot.Progress.get -> Penghou.Qingniao.DelegationProgress!
+Penghou.Qingniao.DelegationExecutionSnapshot.Result.get -> Penghou.Qingniao.DelegationResult?
+Penghou.Qingniao.DelegationExecutionStaleException
+Penghou.Qingniao.ProviderAdapterLookupStatus
+Penghou.Qingniao.ProviderAdapterLookupStatus.Found = 0 -> Penghou.Qingniao.ProviderAdapterLookupStatus
+Penghou.Qingniao.ProviderAdapterLookupStatus.Missing = 1 -> Penghou.Qingniao.ProviderAdapterLookupStatus
+Penghou.Qingniao.ProviderAdapterLookupStatus.Unauthorized = 2 -> Penghou.Qingniao.ProviderAdapterLookupStatus
+Penghou.Qingniao.ProviderAdapterLookupResult
+Penghou.Qingniao.ProviderAdapterLookupResult.Status.get -> Penghou.Qingniao.ProviderAdapterLookupStatus
+Penghou.Qingniao.ProviderAdapterLookupResult.Provider.get -> string!
+Penghou.Qingniao.ProviderAdapterLookupResult.Adapter.get -> Penghou.Qingniao.IExternalOperationProvider?
+Penghou.Qingniao.ProviderAdapterLookupResult.IsFound.get -> bool
+Penghou.Qingniao.ProviderAdapterRegistrationConflictException
+Penghou.Qingniao.ProviderAdapterRegistrationConflictException.ProviderAdapterRegistrationConflictException(string! provider, Penghou.Qingniao.ProviderDescriptor! existing, Penghou.Qingniao.ProviderDescriptor! supplied) -> void
+Penghou.Qingniao.ProviderAdapterRegistrationConflictException.Provider.get -> string!
+Penghou.Qingniao.ProviderAdapterRegistrationConflictException.Existing.get -> Penghou.Qingniao.ProviderDescriptor!
+Penghou.Qingniao.ProviderAdapterRegistrationConflictException.Supplied.get -> Penghou.Qingniao.ProviderDescriptor!
+Penghou.Qingniao.ProviderAdapterCatalogEntry
+Penghou.Qingniao.ProviderAdapterCatalogEntry.Provider.get -> string!
+Penghou.Qingniao.ProviderAdapterCatalogEntry.Revision.get -> long
+Penghou.Qingniao.ProviderAdapterRegistration
+Penghou.Qingniao.ProviderAdapterRegistration.Provider.get -> string!
+Penghou.Qingniao.ProviderAdapterRegistration.IsNew.get -> bool
+Penghou.Qingniao.ProviderAdapterRegistration.Revision.get -> long
+Penghou.Qingniao.ProviderAdapterCatalogSnapshot
+Penghou.Qingniao.ProviderAdapterCatalogSnapshot.Entries.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.ProviderAdapterCatalogEntry!>!
+Penghou.Qingniao.ProviderAdapterCatalogSnapshot.Revision.get -> long
+Penghou.Qingniao.ProviderAdapterCatalogSnapshot.Count.get -> int
+Penghou.Qingniao.InMemoryExternalOperationProviderCatalog
+Penghou.Qingniao.InMemoryExternalOperationProviderCatalog.InMemoryExternalOperationProviderCatalog() -> void
+Penghou.Qingniao.InMemoryExternalOperationProviderCatalog.InMemoryExternalOperationProviderCatalog(int maximumEntries) -> void
+Penghou.Qingniao.InMemoryExternalOperationProviderCatalog.Capacity.get -> int
+const Penghou.Qingniao.InMemoryExternalOperationProviderCatalog.MaximumEntries = 128 -> int
+Penghou.Qingniao.InMemoryExternalOperationProviderCatalog.Register(Penghou.Qingniao.ProviderDescriptor! descriptor, Penghou.Qingniao.IExternalOperationProvider! adapter) -> Penghou.Qingniao.ProviderAdapterRegistration!
+Penghou.Qingniao.InMemoryExternalOperationProviderCatalog.Lookup(Penghou.Qingniao.ProviderDescriptor! descriptor) -> Penghou.Qingniao.ProviderAdapterLookupResult!
+Penghou.Qingniao.InMemoryExternalOperationProviderCatalog.GetSnapshot() -> Penghou.Qingniao.ProviderAdapterCatalogSnapshot!
+Penghou.Qingniao.CandidateValidationRequest
+Penghou.Qingniao.CandidateValidationRequest.CandidateValidationRequest(Penghou.Qingniao.CandidateRevisionReference! Candidate, Penghou.Qingniao.WorkerInvocationEvidence! ImplementationInvocation, Penghou.Qingniao.ExternalOperationCorrelation! Correlation, string! InvocationId) -> void
+Penghou.Qingniao.CandidateValidationRequest.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.CandidateValidationRequest.Candidate.init -> void
+Penghou.Qingniao.CandidateValidationRequest.ImplementationInvocation.get -> Penghou.Qingniao.WorkerInvocationEvidence!
+Penghou.Qingniao.CandidateValidationRequest.ImplementationInvocation.init -> void
+Penghou.Qingniao.CandidateValidationRequest.Correlation.get -> Penghou.Qingniao.ExternalOperationCorrelation!
+Penghou.Qingniao.CandidateValidationRequest.Correlation.init -> void
+Penghou.Qingniao.CandidateValidationRequest.InvocationId.get -> string!
+Penghou.Qingniao.CandidateValidationRequest.InvocationId.init -> void
+Penghou.Qingniao.CandidateReviewRequest
+Penghou.Qingniao.CandidateReviewRequest.CandidateReviewRequest(Penghou.Qingniao.CandidateRevisionReference! Candidate, Penghou.Qingniao.WorkerInvocationEvidence! ImplementationInvocation, Penghou.Qingniao.ExternalOperationCorrelation! Correlation, string! InvocationId) -> void
+Penghou.Qingniao.CandidateReviewRequest.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.CandidateReviewRequest.Candidate.init -> void
+Penghou.Qingniao.CandidateReviewRequest.ImplementationInvocation.get -> Penghou.Qingniao.WorkerInvocationEvidence!
+Penghou.Qingniao.CandidateReviewRequest.ImplementationInvocation.init -> void
+Penghou.Qingniao.CandidateReviewRequest.Correlation.get -> Penghou.Qingniao.ExternalOperationCorrelation!
+Penghou.Qingniao.CandidateReviewRequest.Correlation.init -> void
+Penghou.Qingniao.CandidateReviewRequest.InvocationId.get -> string!
+Penghou.Qingniao.CandidateReviewRequest.InvocationId.init -> void
+Penghou.Qingniao.CandidateCorrectionRequest
+Penghou.Qingniao.CandidateCorrectionRequest.SourceCandidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.CandidateCorrectionRequest.InitialValidation.get -> Penghou.Qingniao.ValidationEvidence?
+Penghou.Qingniao.CandidateCorrectionRequest.InitialReview.get -> Penghou.Qingniao.ReviewEvidence?
+Penghou.Qingniao.CandidateCorrectionRequest.Findings.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.EvidenceFinding!>!
+Penghou.Qingniao.CandidateCorrectionRequest.TargetGeneration.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.CandidateCorrectionRequest.TargetRevision.get -> int
+Penghou.Qingniao.CandidateCorrectionRequest.IdempotencyKey.get -> string!
+Penghou.Qingniao.CandidateCorrectionRequest.Correlation.get -> Penghou.Qingniao.ExternalOperationCorrelation!
+Penghou.Qingniao.CandidateCorrectionRequest.InvocationId.get -> string!
+Penghou.Qingniao.CandidateCorrectionRequest.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.CandidateCorrectionRequest.InitialValidationEvidence.get -> Penghou.Qingniao.ValidationEvidence?
+Penghou.Qingniao.CandidateCorrectionRequest.InitialReviewEvidence.get -> Penghou.Qingniao.ReviewEvidence?
+Penghou.Qingniao.CandidateCorrectionRequest.InitialFindings.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.EvidenceFinding!>!
+Penghou.Qingniao.CandidateCorrectionRequest.TargetNodeGeneration.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.CandidateCorrectionRequest.TargetCandidateRevision.get -> int
+Penghou.Qingniao.CandidateCorrectionRequest.CorrectionIdempotencyKey.get -> string!
+Penghou.Qingniao.CandidateCorrectionOutcome
+Penghou.Qingniao.CandidateCorrectionOutcome.CandidateCorrectionOutcome(Penghou.Qingniao.CandidateRevisionReference! Candidate, Penghou.Qingniao.WorkerInvocationEvidence! ImplementationInvocation) -> void
+Penghou.Qingniao.CandidateCorrectionOutcome.Candidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.CandidateCorrectionOutcome.Candidate.init -> void
+Penghou.Qingniao.CandidateCorrectionOutcome.ImplementationInvocation.get -> Penghou.Qingniao.WorkerInvocationEvidence!
+Penghou.Qingniao.CandidateCorrectionOutcome.ImplementationInvocation.init -> void
+Penghou.Qingniao.CandidateCorrectionOutcome.CorrectedCandidate.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.CandidateCorrectionOutcome.Corrected.get -> Penghou.Qingniao.CandidateRevisionReference!
+Penghou.Qingniao.CandidateCorrectionOutcome.ImplementationEvidence.get -> Penghou.Qingniao.WorkerInvocationEvidence!
+Penghou.Qingniao.ICandidateCorrector
+Penghou.Qingniao.ICandidateCorrector.CorrectAsync(Penghou.Qingniao.CandidateCorrectionRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.CandidateCorrectionOutcome!>
+Penghou.Qingniao.IDeterministicCandidateValidator
+Penghou.Qingniao.IDeterministicCandidateValidator.ValidateAsync(Penghou.Qingniao.CandidateValidationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ValidationEvidence!>
+Penghou.Qingniao.ICandidateValidator
+Penghou.Qingniao.IIndependentCandidateReviewer
+Penghou.Qingniao.IIndependentCandidateReviewer.ReviewAsync(Penghou.Qingniao.CandidateReviewRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ReviewEvidence!>
+Penghou.Qingniao.ICandidateReviewer

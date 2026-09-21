@@ -100,7 +100,6 @@ public sealed class ProviderAdapterCatalogTests
         typeof(ProviderAdapterCatalogEntry).GetProperties()
             .Select(property => property.Name)
             .Should().NotContain(nameof(ProviderAdapterLookupResult.Adapter));
-        typeof(InMemoryExternalOperationProviderCatalog).IsNotPublic.Should().BeTrue();
     }
 
     [Fact]

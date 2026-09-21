@@ -104,6 +104,17 @@ public sealed class BoundaryArchitectureTests
     }
 
     [Fact]
+    public void Host_wiring_surface_is_public()
+    {
+        typeof(DelegationRuntime).IsPublic.Should().BeTrue();
+        typeof(InMemoryExternalOperationProviderCatalog).IsPublic.Should().BeTrue();
+        typeof(ProviderAdapterLookupResult).IsPublic.Should().BeTrue();
+        typeof(IDelegationAdmissionVerifier).IsPublic.Should().BeTrue();
+        typeof(ICandidateVerificationPolicy).IsPublic.Should().BeTrue();
+        typeof(IExternalOperationProvider).IsPublic.Should().BeTrue();
+    }
+
+    [Fact]
     public void Admission_verifier_is_generic_and_fence_is_opaque()
     {
         typeof(IDelegationAdmissionVerifier).GetMethod("Verify")!.ReturnType.Should().Be(typeof(DelegationAdmissionDecision));
