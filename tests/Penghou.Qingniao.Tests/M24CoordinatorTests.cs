@@ -445,10 +445,10 @@ public sealed class M24CoordinatorTests
         var captures = new InMemoryExternalOperationHandleCaptureRegistry();
         return (new InMemoryDelegationCoordinator(
             new InMemoryDelegationAcceptanceRegistry(),
-            new InMemoryWorkflowPlanResolver(),
+            null,
             providers,
             adapters,
-            new SimingExternalOperationSemanticFingerprintVerifier(),
+            new LocalSemanticFingerprintVerifier(),
             captures,
             now: () => Start), captures);
     }
@@ -456,6 +456,7 @@ public sealed class M24CoordinatorTests
     private static DelegationRequest Request(string key, int maximumWorkerCalls = 4, int maximumRetries = 2) => new(
         key,
         "Implement the objective",
+        "m24-provider",
         new WorkspaceReference("local", "workspace", "revision"),
         ["The result is correct"],
         [],

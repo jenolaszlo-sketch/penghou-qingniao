@@ -183,63 +183,24 @@ public sealed class BudgetCapabilityContractsTests
     }
 
     [Fact]
-    public void Provider_matching_is_open_and_deterministic()
+    public void Provider_descriptor_rejects_duplicate_models_and_requires_capabilities()
     {
-        var request = new ProviderSelectionRequest(
-            [new CapabilityRequirement("agent.execute", 2, new Dictionary<string, string> { ["workspace"] = "isolated" })],
-            new ProviderHints(preferredProviders: ["provider-b", "provider-a"], model: "model-v2"));
-        var providers = new[]
-        {
-            new ProviderDescriptor("provider-a", [Capability("agent.execute", 2)], priority: 100, models: ["model-v2"]),
-            new ProviderDescriptor("provider-b", [Capability("agent.execute", 3, ("isolated", "yes"))], priority: 1, models: ["model-v2"]),
-            new ProviderDescriptor("provider-c", [Capability("agent.execute", 3, ("workspace", "isolated"))], priority: 100, models: ["future-model"]),
-            new ProviderDescriptor("disabled", [Capability("agent.execute", 99, ("workspace", "isolated"))], priority: 1, enabled: false),
-        };
-
-        var matches = ProviderSelection.Match(request, providers);
-        matches.Select(match => match.Provider.Provider).Should().Equal("provider-c");
-        ProviderSelection.Select(request, providers)!.Provider.Provider.Should().Be("provider-c");
-
         var duplicateModels = () => new ProviderDescriptor("duplicate", [Capability("agent.execute", 2)], models: ["model-v1", "model-v1"]);
         duplicateModels.Should().Throw<ArgumentException>();
+
+        var noCapabilities = () => new ProviderDescriptor("empty", []);
+        noCapabilities.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Provider_selection_orders_by_hint_then_priority_then_ordinal_identity()
+    public void Capability_requirement_enforces_a_minimum_version()
     {
-        var requirement = new ProviderSelectionRequest([new CapabilityRequirement("agent.execute", 1)]);
-        var providers = new[]
-        {
-            new ProviderDescriptor("provider-z", [Capability("agent.execute", 1)], priority: 100),
-            new ProviderDescriptor("provider-b", [Capability("agent.execute", 1)], priority: 1),
-            new ProviderDescriptor("provider-a", [Capability("agent.execute", 1)], priority: 1),
-        };
+        var version = () => new CapabilityRequirement("agent.execute", 0);
+        version.Should().Throw<ArgumentOutOfRangeException>();
 
-        ProviderSelection.Match(requirement, providers).Select(match => match.Provider.Provider)
-            .Should().Equal("provider-z", "provider-a", "provider-b");
-
-        var hinted = new ProviderSelectionRequest(
-            [new CapabilityRequirement("agent.execute", 1)],
-            new ProviderHints(preferredProviders: ["provider-b"]));
-        var matches = ProviderSelection.Match(hinted, providers);
-        matches.Select(match => match.Provider.Provider).Should().Equal("provider-b", "provider-z", "provider-a");
-        matches[0].HintScore.Should().BeGreaterThan(matches[1].HintScore);
-    }
-
-    [Fact]
-    public void Provider_selection_requires_capability_version_and_all_attributes()
-    {
-        var request = new ProviderSelectionRequest(
-            [new CapabilityRequirement("agent.execute", 2, new Dictionary<string, string> { ["workspace"] = "isolated" })]);
-        var providers = new[]
-        {
-            new ProviderDescriptor("too-old", [Capability("agent.execute", 1, ("workspace", "isolated"))]),
-            new ProviderDescriptor("wrong-attribute", [Capability("agent.execute", 2, ("workspace", "shared"))]),
-            new ProviderDescriptor("compatible", [Capability("agent.execute", 3, ("workspace", "isolated"))]),
-        };
-
-        ProviderSelection.Match(request, providers).Select(match => match.Provider.Provider)
-            .Should().Equal("compatible");
+        var requirement = new CapabilityRequirement("agent.execute", 2, new Dictionary<string, string> { ["workspace"] = "isolated" });
+        requirement.MinimumVersion.Should().Be(2);
+        requirement.Attributes.Should().ContainKey("workspace");
     }
 
     private static CapabilityDescriptor Capability(int version, (string Key, string Value)? attribute = null) =>

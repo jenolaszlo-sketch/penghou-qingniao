@@ -362,13 +362,13 @@ public sealed record ExternalOperationStartRequest
     /// <summary>
     /// Exact semantic envelope whose canonical SHA-256 is carried by
     /// <see cref="ExternalOperationStartIdentity.SemanticFingerprint"/>. The
-    /// envelope intentionally excludes transport details and is exposed so the
-    /// Siming adapter can verify it without Qingniao duplicating canonicalization.
+    /// envelope intentionally excludes transport details and is exposed so a
+    /// verifier can check it without duplicating canonicalization.
     /// </summary>
     public ExternalOperationSemanticInputEnvelope SemanticInput { get; }
 
     /// <summary>
-    /// Verifies the opaque semantic fingerprint through the Siming adapter
+    /// Verifies the opaque semantic fingerprint through the verifier
     /// seam. Hosts must call this successfully before invoking StartAsync.
     /// </summary>
     public void VerifySemanticFingerprint(IExternalOperationSemanticFingerprintVerifier verifier)
@@ -383,8 +383,8 @@ public sealed record ExternalOperationStartRequest
 }
 
 /// <summary>
-/// Versioned semantic inputs for an external start. Siming owns the canonical
-/// serialization and hashing contract; Qingniao owns this bounded input shape.
+/// Versioned semantic inputs for an external start. Qingniao owns this
+/// bounded input shape and its local canonical serialization contract.
 /// </summary>
 public sealed record ExternalOperationSemanticInputEnvelope
 {
@@ -467,11 +467,16 @@ public sealed record ExternalOperationSemanticInputEnvelope
 }
 
 /// <summary>
-/// Verification seam for the Siming canonical-fingerprint adapter. Qingniao
-/// deliberately does not implement canonical JSON or hash serialization here.
+/// Verification seam for external-operation semantic fingerprints. Qingniao
+/// ships a local deterministic implementation; hosts may supply their own.
 /// </summary>
 public interface IExternalOperationSemanticFingerprintVerifier
 {
+    /// <summary>
+    /// Computes the canonical lowercase SHA-256 fingerprint for an envelope.
+    /// </summary>
+    string Compute(ExternalOperationSemanticInputEnvelope semanticInput);
+
     /// <summary>
     /// Performs the Matches contract operation.
     /// </summary>
@@ -1414,7 +1419,7 @@ public interface IExternalOperationProvider
 {
     /// <remarks>
     /// Hosts MUST call <see cref="ExternalOperationStartRequest.VerifySemanticFingerprint"/>
-    /// with their Siming-backed verifier before invoking this method.
+    /// with their semantic-fingerprint verifier before invoking this method.
     /// The provider must invoke <paramref name="handleSink"/> immediately
     /// after learning the task handle, before waiting for final acceptance or
     /// result data. Losing the return value is therefore recoverable.

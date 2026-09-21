@@ -2,22 +2,31 @@ using FluentAssertions;
 
 namespace Penghou.Qingniao.Tests;
 
-public sealed class SimingSemanticFingerprintVerifierTests
+public sealed class LocalSemanticFingerprintVerifierTests
 {
     [Fact]
-    public void Compute_UsesTheFrozenSimingV2SemanticEnvelope()
+    public void Compute_IsDeterministicForTheSameEnvelope()
     {
-        var verifier = new SimingExternalOperationSemanticFingerprintVerifier();
+        var verifier = new LocalSemanticFingerprintVerifier();
+        var envelope = CreateEnvelope();
+
+        verifier.Compute(envelope).Should().Be(verifier.Compute(CreateEnvelope()));
+    }
+
+    [Fact]
+    public void Compute_ProducesLowercaseSha256()
+    {
+        var verifier = new LocalSemanticFingerprintVerifier();
 
         var fingerprint = verifier.Compute(CreateEnvelope());
 
-        fingerprint.Should().Be("928ce8f6f1a83f33777b4f291f9643ad60c40c23c51953b3339d925abc4f876c");
+        fingerprint.Should().MatchRegex("^[0-9a-f]{64}$");
     }
 
     [Fact]
     public void Matches_VerifiesIdentityAndExactSemanticEnvelope()
     {
-        var verifier = new SimingExternalOperationSemanticFingerprintVerifier();
+        var verifier = new LocalSemanticFingerprintVerifier();
         var envelope = CreateEnvelope();
         var identity = CreateIdentity(verifier.Compute(envelope));
 
@@ -50,7 +59,7 @@ public sealed class SimingSemanticFingerprintVerifierTests
     [Fact]
     public void Compute_ChangesForEverySemanticInputAndPreservesArtifactOrder()
     {
-        var verifier = new SimingExternalOperationSemanticFingerprintVerifier();
+        var verifier = new LocalSemanticFingerprintVerifier();
         var artifacts = new[] { CreateArtifact("artifact-1"), CreateArtifact("artifact-2") };
         var baseline = CreateEnvelope(artifacts: artifacts);
         var baselineHash = verifier.Compute(baseline);
@@ -91,7 +100,7 @@ public sealed class SimingSemanticFingerprintVerifierTests
     [Fact]
     public void Compute_NormalizesGuidAndDeadlineRepresentations()
     {
-        var verifier = new SimingExternalOperationSemanticFingerprintVerifier();
+        var verifier = new LocalSemanticFingerprintVerifier();
         var utc = CreateEnvelope(deadline: DateTimeOffset.Parse("2026-01-01T00:00:20Z"));
         var offset = CreateEnvelope(deadline: DateTimeOffset.Parse("2026-01-01T08:00:20+08:00"));
 
@@ -99,9 +108,9 @@ public sealed class SimingSemanticFingerprintVerifierTests
     }
 
     [Fact]
-    public void StartRequest_VerifiesThroughTheSimingAdapter()
+    public void StartRequest_VerifiesThroughTheLocalVerifier()
     {
-        var verifier = new SimingExternalOperationSemanticFingerprintVerifier();
+        var verifier = new LocalSemanticFingerprintVerifier();
         var envelope = CreateEnvelope();
         var identity = CreateIdentity(verifier.Compute(envelope));
         var request = new ExternalOperationStartRequest(

@@ -1,119 +1,67 @@
 namespace Penghou.Qingniao;
 
-/// <summary>Identifies the kind of plan revision selected for a delegation.</summary>
-public enum WorkflowPlanReferenceKind
-{
-    /// <summary>
-    /// Identifies the BuiltInPreset enum value.
-    /// </summary>
-    BuiltInPreset = 0,
-    /// <summary>
-    /// Identifies the FuwenDefinition enum value.
-    /// </summary>
-    FuwenDefinition = 1,
-}
-
 /// <summary>
-/// A workflow plan selection identity. The value does not prove authorization,
-/// verification, or binding; the host policy/resolver must establish those
-/// properties before execution. This is not a Fuwen runtime type.
+/// An opaque external fence bound to one delegation at admission time. The
+/// kind, identifier, revision, and fingerprint are host-defined strings;
+/// Qingniao never interprets what the fence represents (workflow plan or
+/// otherwise). Host admission policy verifies the fence before execution.
 /// </summary>
-public sealed record WorkflowPlanRevisionReference
+public sealed record DelegationAdmissionFence
 {
     /// <summary>
-    /// Initializes a new instance of the WorkflowPlanRevisionReference type.
+    /// Initializes a new instance of the DelegationAdmissionFence type.
     /// </summary>
-    public WorkflowPlanRevisionReference(
-        WorkflowPlanReferenceKind kind,
+    public DelegationAdmissionFence(
+        string kind,
         string identifier,
         string revision,
-        string? canonicalFingerprint)
+        string? fingerprint = null)
     {
-        Kind = kind;
+        Kind = IdentityText.Require(kind, nameof(kind), 128);
         Identifier = IdentityText.Require(identifier, nameof(identifier), 512);
         Revision = IdentityText.Require(revision, nameof(revision), 256);
-        CanonicalFingerprint = canonicalFingerprint is null
-            ? null
-            : IdentityText.RequireSha256(canonicalFingerprint, nameof(canonicalFingerprint));
-
-        if (!Enum.IsDefined(kind))
-        {
-            throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown workflow plan reference kind.");
-        }
-
-        if (kind == WorkflowPlanReferenceKind.BuiltInPreset && CanonicalFingerprint is not null)
-        {
-            throw new ArgumentException("A built-in preset does not accept a caller-supplied content fingerprint.", nameof(canonicalFingerprint));
-        }
-
-        if (kind == WorkflowPlanReferenceKind.FuwenDefinition && CanonicalFingerprint is null)
-        {
-            throw new ArgumentException("A Fuwen definition reference requires a canonical fingerprint.", nameof(canonicalFingerprint));
-        }
+        Fingerprint = fingerprint is null ? null : IdentityText.Require(fingerprint, nameof(fingerprint), 512);
     }
 
     /// <summary>
-    /// Gets the Kind value.
+    /// Gets the host-defined fence kind.
     /// </summary>
-    public WorkflowPlanReferenceKind Kind { get; }
+    public string Kind { get; }
     /// <summary>
-    /// Gets the Identifier value.
+    /// Gets the fence identifier.
     /// </summary>
     public string Identifier { get; }
     /// <summary>
-    /// Gets the Revision value.
+    /// Gets the fence revision.
     /// </summary>
     public string Revision { get; }
     /// <summary>
-    /// Gets the CanonicalFingerprint value.
+    /// Gets the optional opaque fence fingerprint.
     /// </summary>
-    public string? CanonicalFingerprint { get; }
-
-    /// <summary>
-    /// Performs the BuiltInPreset contract operation.
-    /// </summary>
-    public static WorkflowPlanRevisionReference BuiltInPreset(string identifier, string version) =>
-        new(WorkflowPlanReferenceKind.BuiltInPreset, identifier, version, null);
-
-    /// <summary>
-    /// Performs the FuwenDefinition contract operation.
-    /// </summary>
-    public static WorkflowPlanRevisionReference FuwenDefinition(
-        string definitionIdentifier,
-        string revision,
-        string canonicalFingerprint) =>
-        new(WorkflowPlanReferenceKind.FuwenDefinition, definitionIdentifier, revision, canonicalFingerprint);
+    public string? Fingerprint { get; }
 
     /// <summary>
     /// Validates this contract value and throws when an invariant is violated.
     /// </summary>
     public void Validate()
     {
-        if (!Enum.IsDefined(Kind))
-        {
-            throw new ArgumentOutOfRangeException(nameof(Kind), Kind, "Unknown workflow plan reference kind.");
-        }
-
+        IdentityText.Require(Kind, nameof(Kind), 128);
         IdentityText.Require(Identifier, nameof(Identifier), 512);
         IdentityText.Require(Revision, nameof(Revision), 256);
-        if (Kind == WorkflowPlanReferenceKind.FuwenDefinition)
+        if (Fingerprint is not null)
         {
-            IdentityText.RequireSha256(CanonicalFingerprint, nameof(CanonicalFingerprint));
-        }
-        else if (CanonicalFingerprint is not null)
-        {
-            throw new ArgumentException("A built-in preset does not accept a content fingerprint.", nameof(CanonicalFingerprint));
+            IdentityText.Require(Fingerprint, nameof(Fingerprint), 512);
         }
     }
 }
 
-/// <summary>Host-supplied identity of the Hongxian session that contains this work.</summary>
-public readonly record struct HongxianSessionReference
+/// <summary>Host-supplied identity of the supervision session that contains this work.</summary>
+public readonly record struct SupervisionSessionReference
 {
     /// <summary>
-    /// Initializes a new instance of the HongxianSessionReference type.
+    /// Initializes a new instance of the SupervisionSessionReference type.
     /// </summary>
-    public HongxianSessionReference(string identifier)
+    public SupervisionSessionReference(string identifier)
     {
         Identifier = IdentityText.Require(identifier, nameof(identifier), 512);
     }
@@ -290,9 +238,9 @@ public sealed record SupervisorCheckpointDescriptor
     /// </summary>
     public SupervisorCheckpointDescriptor(
         SupervisorCheckpointId checkpointId,
-        HongxianSessionReference session,
+        SupervisionSessionReference session,
         DelegationId delegationId,
-        WorkflowPlanRevisionReference planRevision,
+        DelegationAdmissionFence? fence,
         WorkflowRunExecutionReference workflowRun,
         StructuralNodeReference structuralNode,
         NodeGenerationId nodeGeneration,
@@ -302,7 +250,7 @@ public sealed record SupervisorCheckpointDescriptor
         CheckpointId = checkpointId;
         Session = session;
         DelegationId = delegationId;
-        PlanRevision = planRevision ?? throw new ArgumentNullException(nameof(planRevision));
+        Fence = fence;
         WorkflowRun = workflowRun ?? throw new ArgumentNullException(nameof(workflowRun));
         StructuralNode = structuralNode;
         NodeGeneration = nodeGeneration;
@@ -325,15 +273,16 @@ public sealed record SupervisorCheckpointDescriptor
     /// <summary>
     /// Gets the Session value.
     /// </summary>
-    public HongxianSessionReference Session { get; }
+    public SupervisionSessionReference Session { get; }
     /// <summary>
     /// Gets the DelegationId value.
     /// </summary>
     public DelegationId DelegationId { get; }
     /// <summary>
-    /// Gets the PlanRevision value.
+    /// Gets the optional external fence bound at admission, or
+    /// <see langword="null"/> when the delegation carries no fence.
     /// </summary>
-    public WorkflowPlanRevisionReference PlanRevision { get; }
+    public DelegationAdmissionFence? Fence { get; }
     /// <summary>
     /// Gets the WorkflowRun value.
     /// </summary>
@@ -367,7 +316,7 @@ public sealed record SupervisorCheckpointDescriptor
             throw new ArgumentException("A checkpoint delegation identifier cannot be empty.", nameof(DelegationId));
         }
 
-        PlanRevision.Validate();
+        Fence?.Validate();
         WorkflowRun.Validate();
         StructuralNode.Validate();
         NodeGeneration.Validate();

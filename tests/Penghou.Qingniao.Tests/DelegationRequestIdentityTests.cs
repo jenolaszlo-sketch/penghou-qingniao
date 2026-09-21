@@ -61,9 +61,9 @@ public sealed class DelegationRequestIdentityTests
         var fingerprint = DelegationRequestIdentity.Compute(request);
 
         fingerprint.Version.Should().Be(DelegationRequestFingerprint.CurrentVersion);
-        fingerprint.Hash.Should().Be("f90746d5cedc6189cc1160fc8003d472e73aeeceffdb27a9e2bebddc353a4682");
+        fingerprint.Hash.Should().Be("5a430e852768d3ec8a751cbc1a7a08a6186fc2428410b71d4dc875ed2dbcb81e");
         DelegationRequestIdentity.Canonicalize(request).Should().Be(
-            "{\"acceptanceCriteria\":[\"Criteria\"],\"budget\":{\"maximumDurationTicks\":120000000,\"maximumParallelWorkers\":2,\"maximumRetries\":1,\"maximumWorkerCalls\":8},\"constraints\":[\"Constraint\"],\"objective\":\"Do the work\",\"strategy\":0,\"workspace\":{\"identifier\":\"project\",\"revision\":\"revision\",\"provider\":\"local\"}}");
+            "{\"acceptanceCriteria\":[\"Criteria\"],\"admissionFence\":null,\"budget\":{\"maximumDurationTicks\":120000000,\"maximumParallelWorkers\":2,\"maximumRetries\":1,\"maximumWorkerCalls\":8},\"constraints\":[\"Constraint\"],\"objective\":\"Do the work\",\"provider\":\"test-provider\",\"requiredCapabilities\":[],\"workspace\":{\"identifier\":\"project\",\"revision\":\"revision\",\"provider\":\"local\"}}");
     }
 
     [Fact]
@@ -77,45 +77,40 @@ public sealed class DelegationRequestIdentityTests
     }
 
     [Fact]
-    public void Plan_bound_identity_uses_v2_and_includes_the_plan_revision()
+    public void Fenced_identity_includes_the_fence_and_differs_by_revision()
     {
-        var first = CreateRequest(planRevision: WorkflowPlanRevisionReference.BuiltInPreset("Implement", "1"));
-        var second = CreateRequest(planRevision: WorkflowPlanRevisionReference.BuiltInPreset("Implement", "2"));
+        var first = CreateRequest(fence: new DelegationAdmissionFence("plan", "implement", "1"));
+        var second = CreateRequest(fence: new DelegationAdmissionFence("plan", "implement", "2"));
 
         var fingerprint = DelegationRequestIdentity.Compute(first);
 
-        fingerprint.Version.Should().Be(DelegationRequestFingerprint.PlanBoundVersion);
-        fingerprint.Hash.Should().Be("979d2c7765b102e136b42a31085066c65d643f6467a9d6f9add57a2dad2c3c42");
+        fingerprint.Version.Should().Be(DelegationRequestFingerprint.CurrentVersion);
+        fingerprint.Hash.Should().Be("6a440ffd8535d2128f06bc54cf811036cdea399c5185f3bfb1b879a03a55411d");
         DelegationRequestIdentity.Compute(first).Should().Be(fingerprint);
         DelegationRequestIdentity.Compute(second).Should().NotBe(fingerprint);
-        DelegationRequestIdentity.Canonicalize(first).Should().Contain("Implement");
+        DelegationRequestIdentity.Canonicalize(first).Should().Contain("implement");
     }
 
     [Fact]
-    public void Verified_fuwen_plan_requires_a_canonical_sha256_fingerprint()
+    public void Admission_fence_validates_its_bounds_and_keeps_the_fingerprint_optional()
     {
-        var plan = WorkflowPlanRevisionReference.FuwenDefinition(
-            "definition-1",
-            "revision-1",
-            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
-        var request = CreateRequest(planRevision: plan);
+        var fence = new DelegationAdmissionFence("plan", "fence-1", "revision-1");
+        var request = CreateRequest(fence: fence);
 
         DelegationRequestIdentity.Compute(request).Version
-            .Should().Be(DelegationRequestFingerprint.PlanBoundVersion);
+            .Should().Be(DelegationRequestFingerprint.CurrentVersion);
 
-        var invalid = () => WorkflowPlanRevisionReference.FuwenDefinition(
-            "definition-1",
-            "revision-1",
-            "0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef");
+        var invalid = () => new DelegationAdmissionFence(" ", "fence-1", "revision-1");
         invalid.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Planless_fingerprint_uses_the_historical_v1_contract()
+    public void Fenceless_fingerprint_uses_v3_without_a_fence_section()
     {
         var request = CreateRequest();
 
-        DelegationRequestIdentity.Compute(request).Version.Should().Be("v1");
+        DelegationRequestIdentity.Compute(request).Version.Should().Be("v3");
+        DelegationRequestIdentity.Canonicalize(request).Should().Contain("\"admissionFence\":null");
     }
 
     [Fact]
@@ -155,6 +150,7 @@ public sealed class DelegationRequestIdentityTests
         var act = () => DelegationRequestIdentity.Compute(new DelegationRequest(
             requestKey,
             "Do the work",
+            "test-provider",
             new WorkspaceReference(provider, identifier, revision),
             ["Criteria"],
             ["Constraint"],
@@ -285,19 +281,19 @@ public sealed class DelegationRequestIdentityTests
     }
 
     [Fact]
-    public async Task A_plan_change_is_a_conflict_under_the_same_request_key()
+    public async Task A_fence_change_is_a_conflict_under_the_same_request_key()
     {
         var registry = new InMemoryDelegationAcceptanceRegistry();
         var caller = new DelegationCallerScope("host-user");
-        var first = CreateRequest(planRevision: WorkflowPlanRevisionReference.BuiltInPreset("Implement", "1"));
-        var changed = CreateRequest(planRevision: WorkflowPlanRevisionReference.BuiltInPreset("Implement", "2"));
+        var first = CreateRequest(fence: new DelegationAdmissionFence("plan", "implement", "1"));
+        var changed = CreateRequest(fence: new DelegationAdmissionFence("plan", "implement", "2"));
 
         var accepted = await registry.AcceptAsync(caller, first, TestContext.Current.CancellationToken);
         var act = () => registry.AcceptAsync(caller, changed, TestContext.Current.CancellationToken).AsTask();
 
         (await act.Should().ThrowAsync<DelegationRequestKeyConflictException>())
-            .Which.SuppliedFingerprint.Version.Should().Be(DelegationRequestFingerprint.PlanBoundVersion);
-        accepted.Fingerprint.Version.Should().Be(DelegationRequestFingerprint.PlanBoundVersion);
+            .Which.SuppliedFingerprint.Version.Should().Be(DelegationRequestFingerprint.CurrentVersion);
+        accepted.Fingerprint.Version.Should().Be(DelegationRequestFingerprint.CurrentVersion);
     }
 
     [Fact]
@@ -340,11 +336,11 @@ public sealed class DelegationRequestIdentityTests
     {
         var actions = new Action[]
         {
-            () => default(HongxianSessionReference).Validate(),
+            () => default(SupervisionSessionReference).Validate(),
             () => default(StructuralNodeReference).Validate(),
             () => default(NodeGenerationId).Validate(),
             () => default(SupervisorCheckpointId).Validate(),
-            () => new WorkflowPlanRevisionReference((WorkflowPlanReferenceKind)99, "plan", "revision", null),
+            () => new DelegationAdmissionFence(" ", "fence", "1"),
         };
 
         foreach (var action in actions)
@@ -377,14 +373,16 @@ public sealed class DelegationRequestIdentityTests
     private static DelegationRequest CreateRequest(
         string requestKey = "request-1",
         string objective = "Do the work",
+        string provider = "test-provider",
         IReadOnlyList<string>? acceptanceCriteria = null,
         IReadOnlyList<string>? constraints = null,
-        WorkflowPlanRevisionReference? planRevision = null) => new(
+        DelegationAdmissionFence? fence = null) => new(
         requestKey,
         objective,
+        provider,
         new WorkspaceReference("local", "project", "revision"),
         acceptanceCriteria ?? ["Criteria"],
         constraints ?? ["Constraint"],
         new DelegationBudget(MaximumDuration: TimeSpan.FromSeconds(12)),
-        planRevision: planRevision);
+        admissionFence: fence);
 }

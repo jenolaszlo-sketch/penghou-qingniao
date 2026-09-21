@@ -473,6 +473,20 @@ public sealed class ExternalOperationContractsTests
         public void Register(ExternalOperationStartIdentity identity, ExternalOperationSemanticInputEnvelope envelope) =>
             envelopes[identity.SemanticFingerprint] = envelope;
 
+        public string Compute(ExternalOperationSemanticInputEnvelope semanticInput)
+        {
+            ArgumentNullException.ThrowIfNull(semanticInput);
+            foreach (var pair in envelopes)
+            {
+                if (Equals(pair.Value, semanticInput))
+                {
+                    return pair.Key;
+                }
+            }
+
+            throw new InvalidOperationException("The test verifier has no fingerprint for this envelope.");
+        }
+
         public bool Matches(ExternalOperationStartIdentity identity, ExternalOperationSemanticInputEnvelope semanticInput) =>
             envelopes.TryGetValue(identity.SemanticFingerprint, out var expected)
             && Equals(expected, semanticInput);

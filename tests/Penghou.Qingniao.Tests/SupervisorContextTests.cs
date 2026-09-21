@@ -64,9 +64,9 @@ public sealed class SupervisorContextTests
     [Fact]
     public void Optional_primitive_provenance_is_allowed_but_malformed_references_are_not()
     {
-        var package = CreatePackage(requestedFacets: SupervisorContextFacet.PrimitiveReferences, primitiveReferences: [ContextProvenanceReference.CangjieSnapshot("snapshot-1", Hash)], facetOutcomes: [new ContextFacetOutcome(SupervisorContextFacet.PrimitiveReferences, ContextFacetAvailability.Included, 1)]);
+        var package = CreatePackage(requestedFacets: SupervisorContextFacet.PrimitiveReferences, primitiveReferences: [ContextProvenanceReference.Snapshot("cangjie", "snapshot-1", Hash)], facetOutcomes: [new ContextFacetOutcome(SupervisorContextFacet.PrimitiveReferences, ContextFacetAvailability.Included, 1)]);
         package.PrimitiveReferences.Should().ContainSingle();
-        var badHash = () => ContextProvenanceReference.HetuIndexPublication("repository", "index-run", "ABC");
+        var badHash = () => ContextProvenanceReference.Publication("hetu", "index-publication", "repository", "index-run", "ABC");
         var badIdentity = () => new ContextProvenanceReference("hetu", "index-run", "bad\nidentifier", "revision", Hash);
         badHash.Should().Throw<ArgumentException>();
         badIdentity.Should().Throw<ArgumentException>();
@@ -82,7 +82,7 @@ public sealed class SupervisorContextTests
             items: [new SupervisorContextItem(SupervisorContextFacet.Status, "state", "waiting"), new SupervisorContextItem(SupervisorContextFacet.Summary, "summary", "ready")],
             artifacts: [CreateArtifact()],
             correlations: [new ContextCorrelationReference("hongxian", "session", "session-1")],
-            primitiveReferences: [ContextProvenanceReference.CangjieSnapshot("snapshot-1")],
+            primitiveReferences: [ContextProvenanceReference.Snapshot("cangjie", "snapshot-1")],
             facetOutcomes:
             [
                 new ContextFacetOutcome(SupervisorContextFacet.Status, ContextFacetAvailability.Included, 1),
@@ -191,9 +191,9 @@ public sealed class SupervisorContextTests
         DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
         new SupervisorCheckpointDescriptor(
             new SupervisorCheckpointId(Id(10)),
-            new HongxianSessionReference("session-1"),
+            new SupervisionSessionReference("session-1"),
             new DelegationId(Id(1)),
-            WorkflowPlanRevisionReference.BuiltInPreset("Implement", "1"),
+            new DelegationAdmissionFence("plan", "implement", "1"),
             new WorkflowRunExecutionReference("zhinu", "run-1", "epoch-1"),
             new StructuralNodeReference("node"),
             new NodeGenerationId(Id(11)),

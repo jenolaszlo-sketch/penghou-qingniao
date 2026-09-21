@@ -10,7 +10,7 @@ internal sealed class DelegationCoordinatorStateUnavailableException : InvalidOp
 }
 
 /// <summary>
-/// A deterministic in-memory coordinator for one bounded Implement operation.
+/// A deterministic in-memory coordinator for one bounded delegated execution.
 /// The coordinator is intentionally internal: its private phase and provider
 /// adapter state are execution authority, not public progress contracts.
 /// </summary>
@@ -29,26 +29,29 @@ internal sealed class InMemoryDelegationCoordinator
     private readonly Dictionary<DelegationId, RuntimeState> states = new();
     private readonly SemaphoreSlim acceptanceGate = new(1, 1);
     private readonly IDelegationAcceptanceRegistry acceptanceRegistry;
-    private readonly IWorkflowPlanResolver planResolver;
+    private readonly IDelegationAdmissionVerifier? admissionVerifier;
     private readonly IProviderRegistry providerRegistry;
     private readonly InMemoryExternalOperationProviderCatalog adapterCatalog;
     private readonly InMemoryExternalOperationHandleCaptureRegistry handleRegistry;
     private readonly InMemoryDelegationExecutionStore executionStore;
-    private readonly SimingExternalOperationSemanticFingerprintVerifier fingerprintVerifier;
+    private readonly DelegationExecutionPublisher publisher;
+    private readonly IExternalOperationSemanticFingerprintVerifier fingerprintVerifier;
     private readonly ISupervisorContextProvider? contextProvider;
     private readonly ISupervisorInterventionAcceptanceRegistry interventionRegistry;
     private readonly ICandidateRevisionPublicationRegistry? candidateRegistry;
     private readonly IDeterministicCandidateValidator? candidateValidator;
     private readonly IIndependentCandidateReviewer? candidateReviewer;
     private readonly ICandidateCorrector? candidateCorrector;
+    private readonly ICandidateVerificationPolicy verificationPolicy;
+    private readonly CandidateEvaluationRunner evaluationRunner;
     private readonly Func<DateTimeOffset> now;
 
     internal InMemoryDelegationCoordinator(
         IDelegationAcceptanceRegistry acceptanceRegistry,
-        IWorkflowPlanResolver planResolver,
+        IDelegationAdmissionVerifier? admissionVerifier,
         IProviderRegistry providerRegistry,
         InMemoryExternalOperationProviderCatalog adapterCatalog,
-        SimingExternalOperationSemanticFingerprintVerifier fingerprintVerifier,
+        IExternalOperationSemanticFingerprintVerifier? fingerprintVerifier = null,
         InMemoryExternalOperationHandleCaptureRegistry? handleRegistry = null,
         InMemoryDelegationExecutionStore? executionStore = null,
         Func<DateTimeOffset>? now = null,
@@ -57,22 +60,40 @@ internal sealed class InMemoryDelegationCoordinator
         ICandidateRevisionPublicationRegistry? candidateRegistry = null,
         IDeterministicCandidateValidator? candidateValidator = null,
         IIndependentCandidateReviewer? candidateReviewer = null,
-        ICandidateCorrector? candidateCorrector = null)
+        ICandidateCorrector? candidateCorrector = null,
+        ICandidateVerificationPolicy? verificationPolicy = null)
     {
         this.acceptanceRegistry = acceptanceRegistry ?? throw new ArgumentNullException(nameof(acceptanceRegistry));
-        this.planResolver = planResolver ?? throw new ArgumentNullException(nameof(planResolver));
+        this.admissionVerifier = admissionVerifier;
         this.providerRegistry = providerRegistry ?? throw new ArgumentNullException(nameof(providerRegistry));
         this.adapterCatalog = adapterCatalog ?? throw new ArgumentNullException(nameof(adapterCatalog));
-        this.fingerprintVerifier = fingerprintVerifier ?? throw new ArgumentNullException(nameof(fingerprintVerifier));
+        this.fingerprintVerifier = fingerprintVerifier ?? new LocalSemanticFingerprintVerifier();
         this.handleRegistry = handleRegistry ?? new InMemoryExternalOperationHandleCaptureRegistry();
         this.executionStore = executionStore ?? new InMemoryDelegationExecutionStore();
         this.now = now ?? (() => DateTimeOffset.UtcNow);
+        this.publisher = new DelegationExecutionPublisher(this.executionStore, this.now);
         this.contextProvider = contextProvider;
         this.interventionRegistry = interventionRegistry ?? new InMemorySupervisorInterventionAcceptanceRegistry();
         this.candidateRegistry = candidateRegistry ?? new InMemoryCandidateRevisionPublicationRegistry();
         this.candidateValidator = candidateValidator;
         this.candidateReviewer = candidateReviewer;
         this.candidateCorrector = candidateCorrector;
+        this.verificationPolicy = verificationPolicy ?? FailClosedVerificationPolicy.Instance;
+        if (this.verificationPolicy.MaxVerificationRounds < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(verificationPolicy),
+                "A verification policy must allow at least one verification round.");
+        }
+
+        this.evaluationRunner = new CandidateEvaluationRunner(
+            this.publisher,
+            this.executionStore,
+            this.candidateRegistry,
+            this.candidateValidator,
+            this.candidateReviewer,
+            this.candidateCorrector,
+            this.verificationPolicy);
     }
 
     /// <summary>Accepts a request and publishes its initial queued snapshot.</summary>
@@ -101,16 +122,25 @@ internal sealed class InMemoryDelegationCoordinator
         ArgumentNullException.ThrowIfNull(caller);
         ArgumentNullException.ThrowIfNull(request);
 
-        var resolution = planResolver.Resolve(caller, request);
-        if (!resolution.HasBuiltInStructure || resolution.BoundRequest is null)
+        if (admissionVerifier is not null)
         {
-            throw new InvalidOperationException(
-                "The in-memory coordinator executes only the verified built-in Implement plan.");
+            var decision = admissionVerifier.Verify(new DelegationAdmissionContext(caller, request))
+                ?? throw new DelegationAdmissionException(
+                    "The host admission verifier returned no decision.",
+                    DelegationAdmissionStatus.Unknown,
+                    "The host admission verifier returned no decision.");
+            if (!decision.IsAdmitted)
+            {
+                throw new DelegationAdmissionException(
+                    $"The host rejected the delegation{(decision.Reason is null ? "." : $": {decision.Reason}")}",
+                    decision.Status,
+                    decision.Reason);
+            }
         }
 
         var acceptance = await acceptanceRegistry.AcceptAsync(
             caller,
-            resolution.BoundRequest!,
+            request,
             cancellationToken).ConfigureAwait(false);
 
         lock (stateGate)
@@ -124,32 +154,44 @@ internal sealed class InMemoryDelegationCoordinator
             }
         }
 
-        return await InitializeRuntimeAsync(acceptance, resolution, cancellationToken).ConfigureAwait(false);
+        return await InitializeRuntimeAsync(acceptance, request, cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask<DelegationAcceptance> InitializeRuntimeAsync(
         DelegationAcceptance acceptance,
-        WorkflowPlanResolution resolution,
+        DelegationRequest request,
         CancellationToken cancellationToken)
     {
-        var providerSnapshot = providerRegistry.GetSnapshot();
-        var selection = providerSnapshot.Select(
-            new ProviderSelectionRequest([new CapabilityRequirement(AgentCapability, 1)]));
-        var match = selection.Match;
+        // The caller supplies the provider identity on the request. Qingniao
+        // resolves that exact provider, verifies registration, availability,
+        // and required capabilities, and rejects anything else. It never
+        // chooses between providers.
+        var providerResolution = providerRegistry.Resolve(
+            request.Provider,
+            request.RequiredCapabilities);
         IExternalOperationProvider? adapter = null;
         string? providerFailure = null;
-        if (match is null)
+        if (!providerResolution.IsResolved)
         {
-            providerFailure = "No compatible provider is registered for the agent.execute capability.";
+            providerFailure = providerResolution.Status switch
+            {
+                ProviderResolutionStatus.UnknownProvider =>
+                    $"No provider is registered for identity '{providerResolution.Provider}'.",
+                ProviderResolutionStatus.DisabledProvider =>
+                    $"Provider '{providerResolution.Provider}' is registered but disabled.",
+                ProviderResolutionStatus.IncompatibleProvider =>
+                    $"Provider '{providerResolution.Provider}' does not satisfy required capabilities: {string.Join(", ", providerResolution.MissingCapabilities)}.",
+                _ => $"Provider '{providerResolution.Provider}' could not be resolved.",
+            };
         }
         else
         {
-            var lookup = adapterCatalog.Lookup(match);
+            var lookup = adapterCatalog.Lookup(providerResolution.Descriptor!);
             if (!lookup.IsFound)
             {
                 providerFailure = lookup.Status == ProviderAdapterLookupStatus.Unauthorized
-                    ? $"Provider '{match.Provider.Provider}' is not authorized for execution."
-                    : $"Provider '{match.Provider.Provider}' has no executable adapter.";
+                    ? $"Provider '{providerResolution.Provider}' is not authorized for execution."
+                    : $"Provider '{providerResolution.Provider}' has no executable adapter.";
             }
             else
             {
@@ -181,10 +223,8 @@ internal sealed class InMemoryDelegationCoordinator
 
         var runtime = new RuntimeState(
             acceptance.DelegationId,
-            resolution.BoundRequest!,
-            resolution,
-            providerSnapshot,
-            match,
+            request,
+            providerResolution.Descriptor,
             adapter,
             providerFailure,
             fingerprintVerifier,
@@ -260,7 +300,7 @@ internal sealed class InMemoryDelegationCoordinator
             {
                 runtime.CancellationIntentOnly = false;
                 runtime.Phase = CoordinatorPhase.Complete;
-                return await PublishTerminalAsync(
+                return await publisher.PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.Cancelled,
@@ -360,7 +400,7 @@ internal sealed class InMemoryDelegationCoordinator
                 runtime.CorrectionCancellation?.Cancel();
                 runtime.CancellationIntentOnly = false;
                 runtime.Phase = CoordinatorPhase.Complete;
-                return await PublishTerminalAsync(
+                return await publisher.PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.Cancelled,
@@ -524,12 +564,12 @@ internal sealed class InMemoryDelegationCoordinator
             || (retryingResume && current.Progress.Retries >= runtime.Request.Budget.MaximumRetries))
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(runtime, current, DelegationState.Failed,
+            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
                 "The provider resume retry budget was exhausted.", [], cancellationToken).ConfigureAwait(false);
         }
 
         runtime.ResumeAttempted = true;
-        current = await PublishRunningAsync(runtime, current,
+        current = await publisher.PublishRunningAsync(runtime, current,
             checked(current.Progress.WorkerCalls + 1),
             retryingResume ? checked(current.Progress.Retries + 1) : current.Progress.Retries,
             cancellationToken).ConfigureAwait(false);
@@ -866,7 +906,7 @@ internal sealed class InMemoryDelegationCoordinator
             {
                 runtime.Gate.Release();
                 gateHeld = false;
-                return await RunEvaluationAndCorrectionAsync(runtime, delegationId).ConfigureAwait(false);
+                return await evaluationRunner.RunEvaluationAndCorrectionAsync(runtime, delegationId).ConfigureAwait(false);
             }
 
             return pumped;
@@ -885,382 +925,8 @@ internal sealed class InMemoryDelegationCoordinator
     /// shared correction task. The caller token is deliberately not used for
     /// either task: transport cancellation must not poison durable work.
     /// </summary>
-    private async Task<DelegationExecutionSnapshot> RunEvaluationAndCorrectionAsync(
-        RuntimeState runtime,
-        DelegationId delegationId)
-    {
-        var gateHeld = false;
-        try
-        {
-            while (true)
-            {
-                if (gateHeld)
-                {
-                    runtime.Gate.Release();
-                    gateHeld = false;
-                }
 
-                Task<CandidateEvaluationOutcome> evaluation;
-                lock (runtime.EvaluationSync)
-                {
-                    runtime.EvaluationCancellation ??= new CancellationTokenSource();
-                    runtime.EvaluationTask ??= EvaluateCandidateAsync(runtime, runtime.EvaluationCancellation.Token);
-                    evaluation = runtime.EvaluationTask;
-                }
-
-                var outcome = await evaluation.ConfigureAwait(false);
-                await runtime.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                gateHeld = true;
-                var latest = await executionStore.GetAsync(delegationId, CancellationToken.None).ConfigureAwait(false);
-                if (DelegationLifecycle.IsTerminal(latest.Progress.State))
-                {
-                    return latest;
-                }
-
-                if (runtime.CancellationKey is not null && IsCancellationConfirmed(runtime))
-                {
-                    return await PublishEvaluationCancellationAsync(runtime, latest, outcome).ConfigureAwait(false);
-                }
-
-                if (runtime.CancellationKey is not null
-                    && !runtime.CancellationReconciled)
-                {
-                    return latest;
-                }
-
-                if (runtime.Phase != CoordinatorPhase.Evaluate)
-                {
-                    return latest;
-                }
-
-                var terminal = await HandleEvaluationOutcomeAsync(runtime, latest, outcome).ConfigureAwait(false);
-                if (terminal is not null)
-                {
-                    return terminal;
-                }
-
-                // CorrectionStarted is reserved while the gate is held. No
-                // competing pump can create a second correction invocation.
-                var correction = runtime.CorrectionTask!;
-                runtime.Gate.Release();
-                gateHeld = false;
-                CandidateCorrectionOutcome corrected;
-                Exception? correctionFailure = null;
-                try
-                {
-                    corrected = await correction.ConfigureAwait(false);
-                }
-                catch (Exception exception)
-                {
-                    corrected = null!;
-                    correctionFailure = exception;
-                }
-
-                await runtime.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                gateHeld = true;
-                latest = await executionStore.GetAsync(delegationId, CancellationToken.None).ConfigureAwait(false);
-                if (DelegationLifecycle.IsTerminal(latest.Progress.State))
-                {
-                    return latest;
-                }
-
-                if (runtime.CancellationKey is not null && IsCancellationConfirmed(runtime))
-                {
-                    return await PublishEvaluationCancellationAsync(runtime, latest, null).ConfigureAwait(false);
-                }
-
-                if (runtime.CancellationKey is not null
-                    && !runtime.CancellationReconciled)
-                {
-                    return latest;
-                }
-
-                if (runtime.CancellationKey is not null && runtime.EvaluationCycle == 1)
-                {
-                    return await PublishEvaluationTerminalAsync(runtime, latest, outcome, CancellationToken.None)
-                        .ConfigureAwait(false);
-                }
-
-                if (runtime.EvaluationCycle == 2)
-                {
-                    // Another concurrent pump completed correction and
-                    // reserved the fresh evaluator pair. Join that task.
-                    continue;
-                }
-
-                if (correctionFailure is not null)
-                {
-                    runtime.Phase = CoordinatorPhase.Complete;
-                    return await PublishTerminalAsync(
-                        runtime,
-                        latest,
-                        DelegationState.Failed,
-                        "Candidate correction failed with an unclassified provider error.",
-                        runtime.ResultArtifacts ?? [],
-                        CancellationToken.None,
-                        latest.Progress.WorkerCalls + 4).ConfigureAwait(false);
-                }
-
-                try
-                {
-                    await PublishCorrectedCandidateAsync(runtime, corrected).ConfigureAwait(false);
-                    runtime.EvaluationCycle = 2;
-                    runtime.ValidationFailure = null;
-                    runtime.ReviewFailure = null;
-                    runtime.ValidationInvocationId = $"validation:{runtime.DelegationId.Value:D}:2";
-                    runtime.ReviewInvocationId = $"review:{runtime.DelegationId.Value:D}:2";
-                    runtime.EvaluationTask = null;
-                    runtime.EvaluationCancellation = new CancellationTokenSource();
-                    runtime.Phase = CoordinatorPhase.Evaluate;
-                }
-                catch
-                {
-                    // Leave Candidate and ResultArtifacts pointing at the
-                    // immutable generation-1 publication on any bad output.
-                    runtime.Phase = CoordinatorPhase.Complete;
-                    return await PublishTerminalAsync(
-                        runtime,
-                        latest,
-                        DelegationState.Failed,
-                        "Candidate correction output failed coordinator validation.",
-                        runtime.ResultArtifacts ?? [],
-                        CancellationToken.None,
-                        latest.Progress.WorkerCalls + 4).ConfigureAwait(false);
-                }
-            }
-        }
-        finally
-        {
-            if (gateHeld)
-            {
-                runtime.Gate.Release();
-            }
-        }
-    }
-
-    private async ValueTask<DelegationExecutionSnapshot> PublishEvaluationCancellationAsync(
-        RuntimeState runtime,
-        DelegationExecutionSnapshot current,
-        CandidateEvaluationOutcome? outcome)
-    {
-        if (outcome is not null)
-        {
-            RecordEvaluationEvidence(runtime, outcome);
-        }
-
-        runtime.AggregateEvidence = new EvidenceBundle(runtime.Invocations, runtime.Validations, runtime.Reviews);
-        runtime.Phase = CoordinatorPhase.Complete;
-        return await PublishTerminalAsync(
-            runtime,
-            current,
-            DelegationState.Cancelled,
-            "Cancellation was requested while candidate evaluation was in progress.",
-            runtime.ResultArtifacts ?? [],
-            CancellationToken.None,
-            ActualWorkerCalls(runtime, current)).ConfigureAwait(false);
-    }
-
-    private async ValueTask<DelegationExecutionSnapshot?> HandleEvaluationOutcomeAsync(
-        RuntimeState runtime,
-        DelegationExecutionSnapshot current,
-        CandidateEvaluationOutcome outcome)
-    {
-        if (runtime.EvaluationCycle == 1 && runtime.CorrectionStarted)
-        {
-            // A duplicate pump is represented by the shared correction task;
-            // do not record or publish the generation-1 outcome twice.
-            return null;
-        }
-
-        RecordEvaluationEvidence(runtime, outcome);
-        runtime.AggregateEvidence = new EvidenceBundle(runtime.Invocations, runtime.Validations, runtime.Reviews);
-
-        var validationPass = outcome.Validation is not null && IsPass(outcome.Validation.Outcome);
-        var reviewApprove = outcome.Review is not null && IsApprove(outcome.Review.Outcome);
-        var explicitFailureOrRejection = runtime.ValidationFailure is null
-            && runtime.ReviewFailure is null
-            && outcome.Validation is not null
-            && outcome.Review is not null
-            && runtime.CancellationKey is null
-            && (!validationPass || !reviewApprove);
-        if (runtime.EvaluationCycle == 1 && explicitFailureOrRejection)
-        {
-            if (candidateCorrector is not null)
-            {
-                const int correctionCalls = 1;
-                var evaluatorCalls = ConfiguredEvaluatorCallCount();
-                var projectedWorkerCalls = checked(current.Progress.WorkerCalls + 1 + evaluatorCalls + correctionCalls + evaluatorCalls);
-                if (projectedWorkerCalls <= runtime.Request.Budget.MaximumWorkerCalls)
-                {
-                    runtime.CorrectionStarted = true;
-                    runtime.CorrectionCancellation ??= new CancellationTokenSource();
-                    runtime.CorrectionTask ??= CorrectCandidateAsync(runtime, outcome, runtime.CorrectionCancellation.Token);
-                    return null;
-                }
-
-                runtime.Phase = CoordinatorPhase.Complete;
-                var consumed = ActualWorkerCalls(runtime, current);
-                return await PublishBudgetExceededAsync(
-                    runtime,
-                    current,
-                    runtime.ResultArtifacts ?? [],
-                    "worker-calls",
-                    runtime.Request.Budget.MaximumWorkerCalls,
-                    consumed,
-                    checked(projectedWorkerCalls - consumed),
-                    $"The correction call and fresh evaluator pair exceed the configured worker-call limit (required {projectedWorkerCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
-                    CancellationToken.None).ConfigureAwait(false);
-            }
-        }
-
-        return await PublishEvaluationTerminalAsync(runtime, current, outcome, CancellationToken.None)
-            .ConfigureAwait(false);
-    }
-
-    private void RecordEvaluationEvidence(RuntimeState runtime, CandidateEvaluationOutcome outcome)
-    {
-        if (outcome.Validation is not null
-            && !runtime.Validations.Any(existing => string.Equals(existing.Invocation.Attempt.AttemptId, outcome.Validation.Invocation.Attempt.AttemptId, StringComparison.Ordinal)))
-        {
-            runtime.Validations.Add(outcome.Validation);
-        }
-
-        if (outcome.Review is not null
-            && !runtime.Reviews.Any(existing => string.Equals(existing.Invocation.Attempt.AttemptId, outcome.Review.Invocation.Attempt.AttemptId, StringComparison.Ordinal)))
-        {
-            runtime.Reviews.Add(outcome.Review);
-        }
-
-        if (runtime.ImplementationInvocation is not null
-            && !runtime.Invocations.Any(invocation => string.Equals(invocation.Attempt.AttemptId, runtime.ImplementationInvocation.Attempt.AttemptId, StringComparison.Ordinal)))
-        {
-            runtime.Invocations.Add(runtime.ImplementationInvocation);
-        }
-    }
-
-    private async Task<CandidateCorrectionOutcome> CorrectCandidateAsync(
-        RuntimeState runtime,
-        CandidateEvaluationOutcome outcome,
-        CancellationToken cancellationToken)
-    {
-        var findings = new List<EvidenceFinding>();
-        if (outcome.Validation is not null)
-        {
-            findings.AddRange(outcome.Validation.Findings);
-        }
-
-        if (outcome.Review is not null)
-        {
-            findings.AddRange(outcome.Review.Findings);
-        }
-
-        var targetGeneration = new NodeGenerationId(Guid.NewGuid());
-        var targetCorrelation = new ExternalOperationCorrelation(
-            runtime.Correlation.DelegationId,
-            runtime.Correlation.WorkflowRun,
-            runtime.Correlation.StructuralNode,
-            targetGeneration,
-            $"correction-{runtime.DelegationId.Value:D}",
-            runtime.Correlation.Agent,
-            runtime.Correlation.Task);
-        runtime.CorrectionGeneration = targetGeneration;
-        runtime.CorrectionCorrelation = targetCorrelation;
-        var request = new CandidateCorrectionRequest(
-            runtime.InitialCandidate!,
-            outcome.Validation,
-            outcome.Review,
-            findings,
-            targetGeneration,
-            checked(runtime.InitialCandidate!.Revision + 1),
-            $"correction:{runtime.DelegationId.Value:D}:1",
-            targetCorrelation,
-            $"correction:{runtime.DelegationId.Value:D}:1");
-        runtime.CorrectionInvocationStarted = true;
-        return await candidateCorrector!.CorrectAsync(request, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async ValueTask PublishCorrectedCandidateAsync(RuntimeState runtime, CandidateCorrectionOutcome outcome)
-    {
-        ArgumentNullException.ThrowIfNull(outcome);
-        var candidate = outcome.Candidate ?? throw new InvalidOperationException("The corrector did not return a candidate.");
-        var source = runtime.InitialCandidate ?? throw new InvalidOperationException("The initial candidate is unavailable.");
-        if (candidate.DelegationId != source.DelegationId
-            || candidate.StructuralNode != source.StructuralNode
-            || candidate.CandidateId != source.CandidateId
-            || candidate.Revision != checked(source.Revision + 1)
-            || candidate.NodeGeneration == source.NodeGeneration
-            || candidate.NodeGeneration != runtime.CorrectionGeneration)
-        {
-            throw new InvalidOperationException("The corrected candidate must preserve ownership and CandidateId while advancing exactly one revision and generation.");
-        }
-
-        if (candidate.Artifacts.Count == 0
-            || candidate.ContentIdentity == source.ContentIdentity
-            || candidate.Artifacts.Any(artifact => source.Artifacts.Any(existing =>
-                ArtifactSame(existing, artifact) || existing.ContentIdentity == artifact.ContentIdentity)))
-        {
-            throw new InvalidOperationException("The corrected candidate must contain new artifacts.");
-        }
-
-        var invocation = outcome.ImplementationInvocation ?? throw new InvalidOperationException("The corrector did not return implementation evidence.");
-        if (!CandidateRevisionIdentity.SubjectEqual(candidate, invocation.Candidate)
-            || invocation.NodeGeneration != candidate.NodeGeneration
-            || invocation.Attempt.AttemptId == runtime.ImplementationInvocation!.Attempt.AttemptId
-            || runtime.CorrectionCorrelation is null
-            || invocation.ExecutionCorrelation is null
-            || !CorrelationEqual(invocation.ExecutionCorrelation, runtime.CorrectionCorrelation))
-        {
-            throw new InvalidOperationException("Corrected implementation evidence does not identify the exact fresh candidate and attempt.");
-        }
-
-        if (candidateRegistry is null)
-        {
-            throw new InvalidOperationException("Candidate correction requires a publication registry.");
-        }
-
-        var publication = await candidateRegistry.PublishAsync(candidate, CancellationToken.None).ConfigureAwait(false);
-        if (!CandidateRevisionIdentity.SemanticallyEqual(publication.Candidate, candidate))
-        {
-            throw new InvalidOperationException("The candidate publication registry returned different corrected content.");
-        }
-
-        runtime.Candidate = publication.Candidate;
-        if (candidate.Artifacts.Any(artifact => artifact.DelegationId != candidate.DelegationId
-            || artifact.StructuralNode != candidate.StructuralNode
-            || artifact.NodeGeneration != candidate.NodeGeneration))
-        {
-            throw new InvalidOperationException("Corrected implementation artifacts must belong to the corrected candidate generation.");
-        }
-
-        runtime.ResultArtifacts = candidate.Artifacts.ToArray();
-        runtime.ImplementationInvocation = invocation;
-        runtime.Invocations.Add(invocation);
-    }
-
-    private static bool ArtifactSame(DelegationArtifactReference left, DelegationArtifactReference right) =>
-        string.Equals(left.Provider, right.Provider, StringComparison.Ordinal)
-        && string.Equals(left.Repository, right.Repository, StringComparison.Ordinal)
-        && string.Equals(left.ArtifactId, right.ArtifactId, StringComparison.Ordinal);
-
-    private static bool CorrelationEqual(ExternalOperationCorrelation left, ExternalOperationCorrelation right) =>
-        left.DelegationId == right.DelegationId
-        && left.WorkflowRun == right.WorkflowRun
-        && left.StructuralNode == right.StructuralNode
-        && left.NodeGeneration == right.NodeGeneration
-        && string.Equals(left.ExecutionAttemptId, right.ExecutionAttemptId, StringComparison.Ordinal)
-        && left.Agent == right.Agent
-        && left.Task == right.Task;
-
-    private int ConfiguredEvaluatorCallCount() =>
-        (candidateValidator is null ? 0 : 1) + (candidateReviewer is null ? 0 : 1);
-
-    private static int ActualWorkerCalls(RuntimeState runtime, DelegationExecutionSnapshot current) =>
-        checked(current.Progress.WorkerCalls
-            + (runtime.ResultRetrievalStarted ? 1 : 0)
-            + runtime.EvaluationCallsStarted
-            + (runtime.CorrectionInvocationStarted ? 1 : 0));
-
-    private static bool IsCancellationConfirmed(RuntimeState runtime) =>
+    internal static bool IsCancellationConfirmed(RuntimeState runtime) =>
         runtime.CancellationReceipt is not null
         && (runtime.CancellationReceipt.Disposition == ExternalOperationCancellationDisposition.ConfirmedCancelled
             || (runtime.CancellationReceipt.Disposition == ExternalOperationCancellationDisposition.AlreadyTerminal
@@ -1279,7 +945,7 @@ internal sealed class InMemoryDelegationCoordinator
             if (IsCancellationPending(runtime))
             {
                 runtime.Phase = CoordinatorPhase.Complete;
-                return await PublishTerminalAsync(
+                return await publisher.PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.NeedsSupervisor,
@@ -1291,7 +957,7 @@ internal sealed class InMemoryDelegationCoordinator
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
                 DelegationState.NeedsSupervisor,
@@ -1315,7 +981,7 @@ internal sealed class InMemoryDelegationCoordinator
 
         if (current.Progress.State == DelegationState.Queued)
         {
-            current = await PublishRunningAsync(
+            current = await publisher.PublishRunningAsync(
                 runtime,
                 current,
                 workerCalls: 1,
@@ -1330,14 +996,14 @@ internal sealed class InMemoryDelegationCoordinator
                 // There is no handle to reconcile. Once bounded recovery is
                 // exhausted, an unresolved cancellation must become an
                 // explicit supervisory outcome rather than live forever.
-                return await PublishCancellationNeedsSupervisorAsync(
+                return await publisher.PublishCancellationNeedsSupervisorAsync(
                     runtime,
                     current,
                     cancellationToken).ConfigureAwait(false);
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishBudgetExceededAsync(
+            return await publisher.PublishBudgetExceededAsync(
                 runtime,
                 current,
                 [],
@@ -1356,7 +1022,7 @@ internal sealed class InMemoryDelegationCoordinator
         }
         else
         {
-            current = await PublishRunningAsync(
+            current = await publisher.PublishRunningAsync(
                 runtime,
                 current,
                 workerCalls: current.Progress.WorkerCalls + 1,
@@ -1400,7 +1066,7 @@ internal sealed class InMemoryDelegationCoordinator
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
                 DelegationState.Failed,
@@ -1426,7 +1092,7 @@ internal sealed class InMemoryDelegationCoordinator
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
                 DelegationState.Failed,
@@ -1473,7 +1139,7 @@ internal sealed class InMemoryDelegationCoordinator
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
                 DelegationState.Failed,
@@ -1514,7 +1180,7 @@ internal sealed class InMemoryDelegationCoordinator
             && current.Progress.WorkerCalls >= runtime.Request.Budget.MaximumWorkerCalls)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishBudgetExceededAsync(
+            return await publisher.PublishBudgetExceededAsync(
                 runtime,
                 current,
                 [],
@@ -1528,7 +1194,7 @@ internal sealed class InMemoryDelegationCoordinator
 
         if (pendingCancellation && !TryReserveCancellationSafetyCall(runtime))
         {
-            return await PublishCancellationNeedsSupervisorAsync(
+            return await publisher.PublishCancellationNeedsSupervisorAsync(
                 runtime,
                 current,
                 cancellationToken).ConfigureAwait(false);
@@ -1548,7 +1214,7 @@ internal sealed class InMemoryDelegationCoordinator
             if (pendingCancellation)
             {
                 runtime.Phase = CoordinatorPhase.Observe;
-                return await PublishRunningAsync(
+                return await publisher.PublishRunningAsync(
                     runtime,
                     current,
                     workerCalls: checked(current.Progress.WorkerCalls + 1),
@@ -1563,7 +1229,7 @@ internal sealed class InMemoryDelegationCoordinator
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(runtime, current, DelegationState.Failed,
+            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
                 ClassifiedFailureSummary("observation", exception.Failure), [], cancellationToken,
                 current.Progress.WorkerCalls + 1).ConfigureAwait(false);
         }
@@ -1572,7 +1238,7 @@ internal sealed class InMemoryDelegationCoordinator
             if (pendingCancellation)
             {
                 runtime.Phase = CoordinatorPhase.Observe;
-                return await PublishRunningAsync(
+                return await publisher.PublishRunningAsync(
                     runtime,
                     current,
                     workerCalls: checked(current.Progress.WorkerCalls + 1),
@@ -1581,7 +1247,7 @@ internal sealed class InMemoryDelegationCoordinator
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(runtime, current, DelegationState.Failed,
+            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
                 UnclassifiedFailureSummary("observation"), [], cancellationToken,
                 current.Progress.WorkerCalls + 1).ConfigureAwait(false);
         }
@@ -1608,7 +1274,7 @@ internal sealed class InMemoryDelegationCoordinator
         catch (Exception)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
                 DelegationState.Failed,
@@ -1628,7 +1294,7 @@ internal sealed class InMemoryDelegationCoordinator
                 ? DelegationState.Cancelled
                 : DelegationState.Failed;
             var summary = ProviderTerminalSummary("observation", observation.State, observation.Failure);
-            return await PublishTerminalAsync(runtime, current, state, summary, [], cancellationToken, current.Progress.WorkerCalls + 1)
+            return await publisher.PublishTerminalAsync(runtime, current, state, summary, [], cancellationToken, current.Progress.WorkerCalls + 1)
                 .ConfigureAwait(false);
         }
 
@@ -1644,7 +1310,7 @@ internal sealed class InMemoryDelegationCoordinator
             {
                 runtime.CancellationReconciled = true;
                 runtime.Phase = CoordinatorPhase.GetResult;
-                return await PublishRunningAsync(
+                return await publisher.PublishRunningAsync(
                     runtime,
                     current,
                     workerCalls: current.Progress.WorkerCalls + 1,
@@ -1652,7 +1318,7 @@ internal sealed class InMemoryDelegationCoordinator
                     cancellationToken).ConfigureAwait(false);
             }
 
-            var observed = await PublishRunningAsync(
+            var observed = await publisher.PublishRunningAsync(
                 runtime,
                 current,
                 workerCalls: checked(current.Progress.WorkerCalls + 1),
@@ -1667,14 +1333,14 @@ internal sealed class InMemoryDelegationCoordinator
         if (observation.State == ExternalOperationState.Waiting)
         {
             runtime.Phase = CoordinatorPhase.Observe;
-            return await PublishWaitingAsync(
+            return await publisher.PublishWaitingAsync(
                 runtime,
                 current,
                 observation,
                 cancellationToken).ConfigureAwait(false);
         }
 
-        return await PublishRunningAsync(
+        return await publisher.PublishRunningAsync(
             runtime,
             current,
             workerCalls: current.Progress.WorkerCalls + 1,
@@ -1702,7 +1368,7 @@ internal sealed class InMemoryDelegationCoordinator
         if (current.Progress.WorkerCalls >= runtime.Request.Budget.MaximumWorkerCalls)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishBudgetExceededAsync(
+            return await publisher.PublishBudgetExceededAsync(
                 runtime,
                 current,
                 [],
@@ -1733,14 +1399,14 @@ internal sealed class InMemoryDelegationCoordinator
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(runtime, current, DelegationState.Failed,
+            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
                 ClassifiedFailureSummary("result", exception.Failure), [], cancellationToken,
                 current.Progress.WorkerCalls + 1).ConfigureAwait(false);
         }
         catch
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(runtime, current, DelegationState.Failed,
+            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
                 UnclassifiedFailureSummary("result"), [], cancellationToken,
                 current.Progress.WorkerCalls + 1).ConfigureAwait(false);
         }
@@ -1774,7 +1440,7 @@ internal sealed class InMemoryDelegationCoordinator
         catch (Exception)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
                 DelegationState.Failed,
@@ -1787,13 +1453,12 @@ internal sealed class InMemoryDelegationCoordinator
         if (result.State == ExternalOperationState.Succeeded
             && (candidateValidator is not null || candidateReviewer is not null))
         {
-            if (runtime.EvaluationCycle == 2
-                && runtime.Candidate is { Revision: 2 }
-                && runtime.CorrectionStarted)
+            if (runtime.CorrectionStarted
+                && runtime.Candidate is { Revision: > 1 })
             {
                 // A post-cancellation reconciliation may retrieve the
-                // provider's original v1 result again. Preserve the already
-                // published v2 candidate and only re-enter its evaluator.
+                // provider's original result again. Preserve the already
+                // published corrected candidate and only re-enter its evaluator.
                 runtime.Phase = CoordinatorPhase.Evaluate;
                 return current;
             }
@@ -1801,7 +1466,7 @@ internal sealed class InMemoryDelegationCoordinator
             if (result.Candidate is null)
             {
                 runtime.Phase = CoordinatorPhase.Complete;
-                return await PublishTerminalAsync(
+                return await publisher.PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.Failed,
@@ -1825,45 +1490,10 @@ internal sealed class InMemoryDelegationCoordinator
                     throw new InvalidOperationException("The candidate publication registry returned a different candidate content.");
                 }
                 runtime.Candidate = publication.Candidate;
-                runtime.InitialCandidate = publication.Candidate;
                 runtime.ResultArtifacts = result.Artifacts;
                 runtime.ValidationInvocationId = $"validation:{runtime.DelegationId.Value:D}:1";
                 runtime.ReviewInvocationId = $"review:{runtime.DelegationId.Value:D}:1";
                 runtime.ImplementationInvocation = CreateImplementationInvocation(runtime, publication.Candidate, result);
-                var evaluationCallCount = ConfiguredEvaluatorCallCount();
-                var projectedWorkerCalls = checked(current.Progress.WorkerCalls + 1 + evaluationCallCount);
-                if (projectedWorkerCalls > runtime.Request.Budget.MaximumWorkerCalls)
-                {
-                    runtime.Phase = CoordinatorPhase.Complete;
-                    var recordedAt = Later(current.Progress.UpdatedAt, RequireNow());
-                    // BudgetExceededOutcome requires consumed > limit.  The
-                    // limit here is the already-authorized worker-call
-                    // frontier; the configured maximum and projected demand
-                    // remain explicit in the reason below.
-                    var limit = BudgetQuantity.Count(current.Progress.WorkerCalls);
-                    // Result retrieval has happened; evaluator calls have
-                    // not.  Accounting must record actual work, never the
-                    // projected demand that caused the preflight refusal.
-                    var consumed = BudgetQuantity.Count(current.Progress.WorkerCalls + 1);
-                    var budgetOutcome = new BudgetExceededOutcome(
-                        runtime.DelegationId,
-                        "qingniao-runtime-budget-v1",
-                        new BudgetCharge("worker-calls", consumed),
-                        limit,
-                        consumed,
-                        runtime.DelegationId.Value,
-                        $"The evaluator call budget was insufficient for deterministic validation and independent review (required {projectedWorkerCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
-                        recordedAt);
-                    return await PublishTerminalAsync(
-                        runtime,
-                        current,
-                        DelegationState.BudgetExceeded,
-                        $"The evaluator call budget was insufficient for deterministic validation and independent review (required {projectedWorkerCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
-                        result.Artifacts,
-                        cancellationToken,
-                        current.Progress.WorkerCalls + 1,
-                        budgetOutcome).ConfigureAwait(false);
-                }
                 runtime.Phase = CoordinatorPhase.Evaluate;
                 return current;
             }
@@ -1874,7 +1504,7 @@ internal sealed class InMemoryDelegationCoordinator
             catch
             {
                 runtime.Phase = CoordinatorPhase.Complete;
-                return await PublishTerminalAsync(
+                return await publisher.PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.Failed,
@@ -1898,7 +1528,6 @@ internal sealed class InMemoryDelegationCoordinator
                 }
 
                 runtime.Candidate = publication.Candidate;
-                runtime.InitialCandidate = publication.Candidate;
             }
             catch (OperationCanceledException)
             {
@@ -1907,7 +1536,7 @@ internal sealed class InMemoryDelegationCoordinator
             catch
             {
                 runtime.Phase = CoordinatorPhase.Complete;
-                return await PublishTerminalAsync(
+                return await publisher.PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.Failed,
@@ -1927,7 +1556,7 @@ internal sealed class InMemoryDelegationCoordinator
         var summary = result.State == ExternalOperationState.Succeeded
             ? "The provider completed the operation successfully."
             : ProviderTerminalSummary("result", result.State, result.Failure);
-        return await PublishTerminalAsync(
+        return await publisher.PublishTerminalAsync(
             runtime,
             current,
             state,
@@ -1937,186 +1566,6 @@ internal sealed class InMemoryDelegationCoordinator
             current.Progress.WorkerCalls + 1).ConfigureAwait(false);
     }
 
-    private async Task<CandidateEvaluationOutcome> EvaluateCandidateAsync(RuntimeState runtime, CancellationToken cancellationToken)
-    {
-        var validationTask = candidateValidator is null
-            ? Task.FromResult<ValidationEvidence?>(null)
-            : InvokeValidationAsync(runtime, cancellationToken);
-        var reviewTask = candidateReviewer is null
-            ? Task.FromResult<ReviewEvidence?>(null)
-            : InvokeReviewAsync(runtime, cancellationToken);
-
-        // Await each branch independently.  Awaiting WhenAll alone would
-        // hide a successful branch when its sibling faults.
-        await Task.WhenAll(validationTask, reviewTask).ConfigureAwait(false);
-        return new CandidateEvaluationOutcome(
-            validationTask.Result,
-            reviewTask.Result,
-            null,
-            null);
-    }
-
-    private async Task<ValidationEvidence?> InvokeValidationAsync(RuntimeState runtime, CancellationToken cancellationToken)
-    {
-        Interlocked.Increment(ref runtime.EvaluationCallsStarted);
-        try
-        {
-            var request = new CandidateValidationRequest(
-                runtime.Candidate!,
-                runtime.ImplementationInvocation!,
-                runtime.CorrectionCorrelation ?? runtime.Correlation,
-                runtime.ValidationInvocationId!);
-            var evidence = await candidateValidator!.ValidateAsync(request, cancellationToken).ConfigureAwait(false);
-            ValidateValidationEvidence(runtime, evidence);
-            return evidence;
-        }
-        catch (Exception exception)
-        {
-            runtime.ValidationFailure = exception;
-            return null;
-        }
-    }
-
-    private async Task<ReviewEvidence?> InvokeReviewAsync(RuntimeState runtime, CancellationToken cancellationToken)
-    {
-        Interlocked.Increment(ref runtime.EvaluationCallsStarted);
-        try
-        {
-            var request = new CandidateReviewRequest(
-                runtime.Candidate!,
-                runtime.ImplementationInvocation!,
-                runtime.CorrectionCorrelation ?? runtime.Correlation,
-                runtime.ReviewInvocationId!);
-            var evidence = await candidateReviewer!.ReviewAsync(request, cancellationToken).ConfigureAwait(false);
-            ValidateReviewEvidence(runtime, evidence);
-            return evidence;
-        }
-        catch (Exception exception)
-        {
-            runtime.ReviewFailure = exception;
-            return null;
-        }
-    }
-
-    private async ValueTask<DelegationExecutionSnapshot> PublishEvaluationTerminalAsync(
-        RuntimeState runtime,
-        DelegationExecutionSnapshot current,
-        CandidateEvaluationOutcome outcome,
-        CancellationToken cancellationToken)
-    {
-        runtime.Phase = CoordinatorPhase.Complete;
-        runtime.AggregateEvidence = new EvidenceBundle(
-            runtime.Invocations,
-            runtime.Validations,
-            runtime.Reviews);
-
-        var validationPass = outcome.Validation is not null && IsPass(outcome.Validation.Outcome);
-        var reviewApprove = outcome.Review is not null && IsApprove(outcome.Review.Outcome);
-        var concerns = new List<string>();
-        if (runtime.ValidationFailure is not null)
-        {
-            concerns.Add("Deterministic validation fault: unclassified provider error.");
-        }
-        else if (outcome.Validation is null)
-        {
-            concerns.Add("Deterministic validation evidence was not produced.");
-        }
-        else if (!validationPass)
-        {
-            concerns.Add("Deterministic validation failed.");
-        }
-
-        if (runtime.ReviewFailure is not null)
-        {
-            concerns.Add("Independent review fault: unclassified provider error.");
-        }
-        else if (outcome.Review is null && candidateReviewer is not null)
-        {
-            concerns.Add("Independent review evidence was not produced.");
-        }
-        else if (outcome.Review is not null && !reviewApprove)
-        {
-            concerns.Add("Independent review rejected the candidate.");
-        }
-
-        var state = validationPass && reviewApprove
-            ? DelegationState.Completed
-            : runtime.ValidationFailure is not null || outcome.Validation is null || !validationPass
-                ? DelegationState.Failed
-                : DelegationState.NeedsSupervisor;
-        var summary = state switch
-        {
-            DelegationState.Completed => "Candidate passed deterministic validation and independent review.",
-            DelegationState.NeedsSupervisor => "Independent review raised a concern requiring supervision.",
-            _ => "Deterministic validation did not pass.",
-        };
-        var evidence = new DelegationEvidence(
-            [],
-            [],
-            validationPass ? 1 : 0,
-            validationPass ? 0 : 1,
-            reviewApprove,
-            outcome.Review?.Findings.Count(finding => finding.Resolved) ?? 0);
-        return await PublishTerminalAsync(
-            runtime,
-            current,
-            state,
-            summary,
-            runtime.ResultArtifacts ?? [],
-            cancellationToken,
-            ActualWorkerCalls(runtime, current),
-            evidence: evidence,
-            unresolvedConcerns: concerns).ConfigureAwait(false);
-    }
-
-    private static void ValidateValidationEvidence(RuntimeState runtime, ValidationEvidence evidence)
-    {
-        ArgumentNullException.ThrowIfNull(evidence);
-        if (!CandidateRevisionIdentity.SubjectEqual(runtime.Candidate, evidence.Candidate)
-            || evidence.Invocation.Attempt.AttemptId != runtime.ValidationInvocationId
-            || !evidence.Invocation.ExecutionCategory.StartsWith("deterministic.", StringComparison.Ordinal)
-            || evidence.Invocation.Candidate is null)
-        {
-            throw new InvalidOperationException("Validation evidence does not identify the exact sealed candidate and invocation.");
-        }
-    }
-
-    private static void ValidateReviewEvidence(RuntimeState runtime, ReviewEvidence evidence)
-    {
-        ArgumentNullException.ThrowIfNull(evidence);
-        if (!CandidateRevisionIdentity.SubjectEqual(runtime.Candidate, evidence.Candidate)
-            || evidence.Invocation.Attempt.AttemptId != runtime.ReviewInvocationId
-            || evidence.Independence.ImplementationInvocationId != runtime.ImplementationInvocation!.Attempt.AttemptId
-            || evidence.Independence.ReviewInvocationId != runtime.ReviewInvocationId
-            || string.Equals(evidence.Independence.ImplementationInvocationId, evidence.Independence.ReviewInvocationId, StringComparison.Ordinal)
-            || evidence.Invocation.Attempt.AttemptId == runtime.ImplementationInvocation!.Attempt.AttemptId
-            || evidence.Invocation.Candidate is null)
-        {
-            throw new InvalidOperationException("Review evidence does not prove an independent attempt over the exact sealed candidate.");
-        }
-
-        // Independence claims are checked against observable invocation
-        // metadata whenever it exists.  A reviewer cannot self-report a
-        // different provider/profile/model while using the same values.
-        var implementation = runtime.ImplementationInvocation!;
-        if (evidence.Independence.Provider == IndependenceAssessment.Different
-            && string.Equals(evidence.Invocation.Attempt.Provider, implementation.Attempt.Provider, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("Review independence claims a different provider but both attempts use the same provider.");
-        }
-
-        if (evidence.Independence.Profile == IndependenceAssessment.Different
-            && string.Equals(evidence.Invocation.Profile, implementation.Profile, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("Review independence claims a different profile but invocation metadata matches.");
-        }
-
-        if (evidence.Independence.Model == IndependenceAssessment.Different
-            && string.Equals(evidence.Invocation.ResolvedModel, implementation.ResolvedModel, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("Review independence claims a different model but invocation metadata matches.");
-        }
-    }
 
     private static WorkerInvocationEvidence CreateImplementationInvocation(
         RuntimeState runtime,
@@ -2133,7 +1582,7 @@ internal sealed class InMemoryDelegationCoordinator
             runtime.AcceptedAt,
             result.CompletedAt,
             AgentCapability,
-            "implement",
+            "delegation",
             runtime.Correlation.Agent.Provider,
             null,
             runtime.Correlation.Agent.Identifier,
@@ -2143,17 +1592,6 @@ internal sealed class InMemoryDelegationCoordinator
             candidate,
             executionCorrelation: runtime.Correlation);
     }
-
-    private static bool IsPass(string outcome) =>
-        string.Equals(outcome, "passed", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(outcome, "pass", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(outcome, "approved", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsApprove(string outcome) =>
-        string.Equals(outcome, "approved", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(outcome, "approve", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(outcome, "passed", StringComparison.OrdinalIgnoreCase);
 
     private async ValueTask<DelegationExecutionSnapshot> RetryTransportAsync(
         RuntimeState runtime,
@@ -2166,7 +1604,7 @@ internal sealed class InMemoryDelegationCoordinator
             || current.Progress.Retries >= runtime.Request.Budget.MaximumRetries)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishBudgetExceededAsync(
+            return await publisher.PublishBudgetExceededAsync(
                 runtime,
                 current,
                 [],
@@ -2188,7 +1626,7 @@ internal sealed class InMemoryDelegationCoordinator
         }
 
         runtime.Phase = phase;
-        return await PublishRunningAsync(
+        return await publisher.PublishRunningAsync(
             runtime,
             current,
             workerCalls: current.Progress.WorkerCalls + 1,
@@ -2221,7 +1659,7 @@ internal sealed class InMemoryDelegationCoordinator
 
         if (!TryReserveCancellationSafetyCall(runtime))
         {
-            return await PublishCancellationNeedsSupervisorAsync(
+            return await publisher.PublishCancellationNeedsSupervisorAsync(
                 runtime,
                 current,
                 cancellationToken).ConfigureAwait(false);
@@ -2229,7 +1667,7 @@ internal sealed class InMemoryDelegationCoordinator
 
         runtime.CancellationIntentOnly = false;
         runtime.CancellationAttempted = true;
-        current = await PublishRunningAsync(
+        current = await publisher.PublishRunningAsync(
             runtime,
             current,
             checked(current.Progress.WorkerCalls + 1),
@@ -2302,7 +1740,7 @@ internal sealed class InMemoryDelegationCoordinator
             case ExternalOperationCancellationDisposition.ConfirmedCancelled:
                 runtime.CancellationReconciled = true;
                 runtime.Phase = CoordinatorPhase.Complete;
-                return await PublishTerminalAsync(
+                return await publisher.PublishTerminalAsync(
                     runtime,
                     current,
                     DelegationState.Cancelled,
@@ -2316,7 +1754,7 @@ internal sealed class InMemoryDelegationCoordinator
                     case ExternalOperationState.Cancelled:
                         runtime.CancellationReconciled = true;
                         runtime.Phase = CoordinatorPhase.Complete;
-                        return await PublishTerminalAsync(
+                        return await publisher.PublishTerminalAsync(
                             runtime,
                             current,
                             DelegationState.Cancelled,
@@ -2329,7 +1767,7 @@ internal sealed class InMemoryDelegationCoordinator
                         return current;
                     default:
                         runtime.Phase = CoordinatorPhase.Complete;
-                        return await PublishTerminalAsync(
+                        return await publisher.PublishTerminalAsync(
                             runtime,
                             current,
                             DelegationState.Failed,
@@ -2440,7 +1878,7 @@ internal sealed class InMemoryDelegationCoordinator
             or ExternalOperationState.Rejected)
         {
             runtime.Phase = CoordinatorPhase.Complete;
-            return await PublishTerminalAsync(
+            return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
                 receipt.State == ExternalOperationState.Cancelled
@@ -2456,231 +1894,6 @@ internal sealed class InMemoryDelegationCoordinator
         return current;
     }
 
-    private async ValueTask<DelegationExecutionSnapshot> PublishRunningAsync(
-        RuntimeState runtime,
-        DelegationExecutionSnapshot current,
-        int workerCalls,
-        int retries,
-        CancellationToken cancellationToken)
-    {
-        var timestamp = Later(current.Progress.UpdatedAt, RequireNow());
-        var progress = new DelegationProgress(
-            runtime.DelegationId,
-            DelegationState.Running,
-            checked(current.Progress.Revision + 1),
-            ["implement"],
-            current.Progress.CompletedSteps,
-            workerCalls,
-            retries,
-            timestamp);
-        var published = await executionStore.PublishProgressAsync(
-            runtime.DelegationId,
-            progress,
-            cancellationToken).ConfigureAwait(false);
-        if (current.Progress.State == DelegationState.WaitingForSupervisor)
-        {
-            // Any accepted transition out of a wait closes that checkpoint
-            // episode. The next provider Waiting observation gets a fresh ID.
-            runtime.WakeHint = null;
-            runtime.CheckpointId = null;
-        }
-
-        return published;
-    }
-
-    private async ValueTask<DelegationExecutionSnapshot> PublishWaitingAsync(
-        RuntimeState runtime,
-        DelegationExecutionSnapshot current,
-        ExternalOperationObservation observation,
-        CancellationToken cancellationToken)
-    {
-        var timestamp = Later(current.Progress.UpdatedAt, RequireNow());
-        if (runtime.CheckpointId is null)
-        {
-            // A new provider Waiting episode gets a fresh supervisory
-            // decision and resume application state. The external handle and
-            // its correlation deliberately remain unchanged: this is not a
-            // semantic node re-execution or a new NodeGeneration.
-            runtime.ResumeRequest = null;
-            runtime.ResumeReceipt = null;
-            runtime.ResumeAttempted = false;
-            runtime.ResumeAcceptedAmbiguity = false;
-            runtime.ResumeAmbiguityObserved = false;
-            runtime.ResumePreviousHandle = null;
-            runtime.AcceptedIntervention = null;
-        }
-
-        var checkpointId = runtime.CheckpointId ??= new SupervisorCheckpointId(Guid.NewGuid());
-        // DelegationRequest intentionally has no Hongxian session field. This
-        // deterministic placeholder is only an in-memory correlation value;
-        // it is not a durable or authoritative Hongxian session identity.
-        var session = new HongxianSessionReference(
-            $"qingniao-inmemory-session:{runtime.DelegationId.Value:D}");
-        var checkpoint = new SupervisorCheckpointDescriptor(
-            checkpointId,
-            session,
-            runtime.DelegationId,
-            runtime.Resolution.PlanRevision,
-            runtime.Correlation.WorkflowRun,
-            runtime.Correlation.StructuralNode,
-            new NodeGenerationId(runtime.Correlation.NodeGeneration.Value),
-            checked(current.Progress.Revision + 1),
-            dependentProgressGated: true);
-        var progress = new DelegationProgress(
-            runtime.DelegationId,
-            DelegationState.WaitingForSupervisor,
-            checked(current.Progress.Revision + 1),
-            ["implement"],
-            current.Progress.CompletedSteps,
-            checked(current.Progress.WorkerCalls + 1),
-            current.Progress.Retries,
-            timestamp,
-            checkpoint);
-        var published = await executionStore.PublishProgressAsync(
-            runtime.DelegationId,
-            progress,
-            cancellationToken).ConfigureAwait(false);
-
-        // Publication precedes both the wake hint and any later host
-        // activation, so observers never receive an unusable fence.
-        runtime.WakeHint = new WakeHint(
-            runtime.DelegationId,
-            checkpointId,
-            observation.ProviderStatus ?? "The external operation is waiting for supervisor input.",
-            published.Progress.Revision,
-            expiresAt: published.Progress.UpdatedAt.AddMinutes(30));
-        return published;
-    }
-
-    private async ValueTask<DelegationExecutionSnapshot> PublishTerminalAsync(
-        RuntimeState runtime,
-        DelegationExecutionSnapshot current,
-        DelegationState state,
-        string summary,
-        IReadOnlyList<DelegationArtifactReference> artifacts,
-        CancellationToken cancellationToken,
-        int? workerCalls = null,
-        BudgetExceededOutcome? budgetExceeded = null,
-        DelegationEvidence? evidence = null,
-        IReadOnlyList<string>? unresolvedConcerns = null)
-    {
-        var timestamp = Later(current.Progress.UpdatedAt, RequireNow());
-        runtime.AggregateEvidence = new EvidenceBundle(
-            runtime.Invocations,
-            runtime.Validations,
-            runtime.Reviews);
-        var progress = new DelegationProgress(
-            runtime.DelegationId,
-            state,
-            checked(current.Progress.Revision + 1),
-            [],
-            ["implement"],
-            workerCalls ?? ActualWorkerCalls(runtime, current),
-            current.Progress.Retries,
-            timestamp);
-        var normalizedEvidence = runtime.AggregateEvidence;
-        DelegationResultReference? resultReference = null;
-        if (runtime.Candidate is not null)
-        {
-            resultReference = new DelegationResultReference(
-                runtime.DelegationId,
-                new DelegationResultId(runtime.DelegationId.Value),
-                runtime.Candidate,
-                artifacts,
-                normalizedEvidence);
-        }
-        var result = new DelegationResult(
-            runtime.DelegationId,
-            state,
-            NormalizeFailure(summary),
-            evidence ?? new DelegationEvidence([], [], 0, 0, null, 0),
-            artifacts,
-            unresolvedConcerns ?? (state == DelegationState.Completed ? [] : [NormalizeFailure(summary)]),
-            timestamp,
-            normalizedEvidence: normalizedEvidence,
-            budgetExceeded: budgetExceeded,
-            resultReference: resultReference);
-        var published = await executionStore.PublishTerminalAsync(
-            runtime.DelegationId,
-            progress,
-            result,
-            cancellationToken).ConfigureAwait(false);
-        runtime.WakeHint = null;
-        runtime.CheckpointId = null;
-        return published;
-    }
-
-    private ValueTask<DelegationExecutionSnapshot> PublishCancellationNeedsSupervisorAsync(
-        RuntimeState runtime,
-        DelegationExecutionSnapshot current,
-        CancellationToken cancellationToken) =>
-        PublishTerminalAsync(
-            runtime,
-            current,
-            DelegationState.NeedsSupervisor,
-            "Cancellation remains unresolved after the coordinator safety observation ceiling.",
-            [],
-            cancellationToken);
-
-    private ValueTask<DelegationExecutionSnapshot> PublishBudgetExceededAsync(
-        RuntimeState runtime,
-        DelegationExecutionSnapshot current,
-        IReadOnlyList<DelegationArtifactReference> artifacts,
-        string dimension,
-        long limit,
-        long actualConsumed,
-        long refusedAmount,
-        string reason,
-        CancellationToken cancellationToken,
-        int? workerCalls = null)
-    {
-        var actual = dimension == "duration"
-            ? BudgetQuantity.Ticks(actualConsumed)
-            : BudgetQuantity.Count(actualConsumed);
-        var limitQuantity = dimension == "duration"
-            ? BudgetQuantity.Ticks(limit)
-            : BudgetQuantity.Count(limit);
-        if (refusedAmount <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(refusedAmount), "A refused budget charge must be positive.");
-        }
-
-        var refusedQuantity = dimension == "duration"
-            ? BudgetQuantity.Ticks(refusedAmount)
-            : BudgetQuantity.Count(refusedAmount);
-        var aggregate = new BudgetQuantity(
-            actual.Kind,
-            checked(actual.Value + refusedQuantity.Value),
-            actual.Currency);
-        var outcome = new BudgetExceededOutcome(
-            runtime.DelegationId,
-            "qingniao-runtime-budget-v1",
-            new BudgetCharge(dimension, refusedQuantity),
-            limitQuantity,
-            aggregate,
-            actual,
-            new BudgetCharge(dimension, refusedQuantity),
-            DeterministicBudgetDecisionId(runtime.DelegationId, dimension, actualConsumed, limit),
-            null,
-            reason,
-            Later(current.Progress.UpdatedAt, RequireNow()));
-        return PublishTerminalAsync(
-            runtime,
-            current,
-            DelegationState.BudgetExceeded,
-            reason,
-            artifacts,
-            cancellationToken,
-            workerCalls ?? ActualWorkerCalls(runtime, current),
-            outcome);
-    }
-
-    private static Guid DeterministicBudgetDecisionId(DelegationId delegationId, string dimension, long consumed, long limit)
-    {
-        var payload = $"{delegationId.Value:D}|{dimension}|{consumed}|{limit}";
-        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payload));
-        return new Guid(hash.AsSpan(0, 16));
-    }
 
     private async ValueTask CaptureReturnedHandleAsync(
         ExternalOperationStartReceipt receipt,
@@ -2784,9 +1997,6 @@ internal sealed class InMemoryDelegationCoordinator
             : value;
     }
 
-    private static DateTimeOffset Later(DateTimeOffset left, DateTimeOffset right) =>
-        left >= right ? left : right;
-
     private async ValueTask<DelegationExecutionSnapshot?> EnforceDurationAsync(
         RuntimeState runtime,
         DelegationExecutionSnapshot current,
@@ -2806,7 +2016,7 @@ internal sealed class InMemoryDelegationCoordinator
         }
 
         runtime.Phase = CoordinatorPhase.Complete;
-        return await PublishBudgetExceededAsync(
+        return await publisher.PublishBudgetExceededAsync(
             runtime,
             current,
             [],
@@ -2847,22 +2057,6 @@ internal sealed class InMemoryDelegationCoordinator
     private static string UnclassifiedFailureSummary(string operation) =>
         $"Provider {operation} failed with an unclassified error.";
 
-    private static string NormalizeFailure(string value) =>
-        string.IsNullOrWhiteSpace(value)
-            ? "The provider operation failed."
-            : value.Trim().Length <= 16_384
-                ? value.Trim()
-                : value.Trim()[..16_384];
-
-    private static string NormalizeConcern(string value)
-    {
-        var normalized = NormalizeFailure(value);
-        const int maximumConcernLength = 4_096;
-        return normalized.Length <= maximumConcernLength
-            ? normalized
-            : normalized[..maximumConcernLength];
-    }
-
     private static bool InterventionsEqual(SupervisorIntervention left, SupervisorIntervention right) =>
         left.DelegationId == right.DelegationId
         && left.CheckpointId == right.CheckpointId
@@ -2870,7 +2064,7 @@ internal sealed class InMemoryDelegationCoordinator
         && left.ExpectedRevision == right.ExpectedRevision
         && SupervisorInterventionIdentity.Compute(left) == SupervisorInterventionIdentity.Compute(right);
 
-    private enum CoordinatorPhase
+    internal enum CoordinatorPhase
     {
         Start,
         Observe,
@@ -2920,24 +2114,20 @@ internal sealed class InMemoryDelegationCoordinator
         }
     }
 
-    private sealed class RuntimeState
+    internal sealed class RuntimeState
     {
         internal RuntimeState(
             DelegationId delegationId,
             DelegationRequest request,
-            WorkflowPlanResolution resolution,
-            ProviderRegistrySnapshot providerSnapshot,
-            ProviderMatch? match,
+            ProviderDescriptor? provider,
             IExternalOperationProvider? adapter,
             string? providerFailure,
-            SimingExternalOperationSemanticFingerprintVerifier fingerprintVerifier,
+            IExternalOperationSemanticFingerprintVerifier fingerprintVerifier,
             DateTimeOffset acceptedAt)
         {
             DelegationId = delegationId;
             Request = request;
-            Resolution = resolution;
-            ProviderSnapshot = providerSnapshot;
-            Match = match;
+            Provider = provider;
             Adapter = adapter;
             ProviderFailure = providerFailure;
             AcceptedAt = acceptedAt == default
@@ -2945,11 +2135,11 @@ internal sealed class InMemoryDelegationCoordinator
                 : acceptedAt;
             Phase = CoordinatorPhase.Start;
 
-            if (match is not null)
+            if (provider is not null)
             {
                 var agent = new ExternalAgentReference(
-                    match.Provider.Provider,
-                    match.Provider.Provider,
+                    provider.Provider,
+                    provider.Provider,
                     AgentProtocolVersion);
                 Correlation = new ExternalOperationCorrelation(
                     delegationId,
@@ -2957,7 +2147,7 @@ internal sealed class InMemoryDelegationCoordinator
                         "qingniao-inmemory",
                         delegationId.Value.ToString("N"),
                         "epoch-1"),
-                    new StructuralNodeReference("implement"),
+                    new StructuralNodeReference("delegation"),
                     new NodeGenerationId(delegationId.Value),
                     "attempt-1",
                     agent);
@@ -2974,7 +2164,7 @@ internal sealed class InMemoryDelegationCoordinator
                     Correlation.StructuralNode,
                     Correlation.NodeGeneration,
                     Correlation.ExecutionAttemptId,
-                    $"qingniao:{delegationId.Value:D}:implement:attempt-1",
+                    $"qingniao:{delegationId.Value:D}:delegation:attempt-1",
                     fingerprintVerifier.Compute(semanticInput));
                 StartRequest = new ExternalOperationStartRequest(
                     StartIdentity,
@@ -2991,9 +2181,7 @@ internal sealed class InMemoryDelegationCoordinator
 
         internal DelegationId DelegationId { get; }
         internal DelegationRequest Request { get; }
-        internal WorkflowPlanResolution Resolution { get; }
-        internal ProviderRegistrySnapshot ProviderSnapshot { get; }
-        internal ProviderMatch? Match { get; }
+        internal ProviderDescriptor? Provider { get; }
         internal IExternalOperationProvider? Adapter { get; }
         internal string? ProviderFailure { get; }
         internal DateTimeOffset AcceptedAt { get; }
@@ -3021,7 +2209,6 @@ internal sealed class InMemoryDelegationCoordinator
         internal bool ResumeAcceptedAmbiguity { get; set; }
         internal bool ResumeAmbiguityObserved { get; set; }
         internal CandidateRevisionReference? Candidate { get; set; }
-        internal CandidateRevisionReference? InitialCandidate { get; set; }
         internal IReadOnlyList<DelegationArtifactReference>? ResultArtifacts { get; set; }
         internal WorkerInvocationEvidence? ImplementationInvocation { get; set; }
         internal EvidenceBundle? AggregateEvidence { get; set; }

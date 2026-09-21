@@ -8,10 +8,8 @@ namespace Penghou.Qingniao;
 /// <summary>The versioned, deterministic identity of normalized request content.</summary>
 public readonly record struct DelegationRequestFingerprint
 {
-    /// <summary>Fingerprint format version for requests without a plan revision.</summary>
-    public const string CurrentVersion = "v1";
-    /// <summary>Fingerprint format version for requests bound to a plan revision.</summary>
-    public const string PlanBoundVersion = "v2";
+    /// <summary>Fingerprint format version for the admission-fence request contract.</summary>
+    public const string CurrentVersion = "v3";
 
     /// <summary>Creates a validated version and lowercase hexadecimal hash pair.</summary>
     public DelegationRequestFingerprint(string version, string hash)
@@ -67,8 +65,8 @@ public readonly record struct DelegationRequestFingerprint
 
 /// <summary>
 /// Normalizes delegation request content and computes its versioned SHA-256 identity.
-/// Planless requests use the historical v1 contract; requests with a plan
-/// revision use v2, which includes that plan identity. The caller scope and
+/// The canonical form covers the caller-supplied provider, required
+/// capabilities, and the optional opaque admission fence. The caller scope and
 /// <see cref="DelegationRequest.RequestKey"/> are intentionally excluded from
 /// content fingerprints and are compared separately by acceptance.
 /// </summary>
@@ -80,12 +78,7 @@ public static class DelegationRequestIdentity
         ArgumentNullException.ThrowIfNull(request);
         DelegationRequestValidator.Validate(request);
 
-        if (request.PlanRevision is not null)
-        {
-            return ComputeV2(request);
-        }
-
-        var json = CanonicalizeV1(request);
+        var json = Canonicalize(request);
         var bytes = Encoding.UTF8.GetBytes(json);
         var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         return new DelegationRequestFingerprint(DelegationRequestFingerprint.CurrentVersion, hash);
@@ -97,27 +90,35 @@ public static class DelegationRequestIdentity
         ArgumentNullException.ThrowIfNull(request);
         DelegationRequestValidator.Validate(request);
 
-        return request.PlanRevision is null ? CanonicalizeV1(request) : CanonicalizeV2(request);
-    }
-
-    private static DelegationRequestFingerprint ComputeV2(DelegationRequest request)
-    {
-        var json = CanonicalizeV2(request);
-        var bytes = Encoding.UTF8.GetBytes(json);
-        var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-        return new DelegationRequestFingerprint(DelegationRequestFingerprint.PlanBoundVersion, hash);
-    }
-
-    private static string CanonicalizeV1(DelegationRequest request)
-    {
-        DelegationRequestValidator.Validate(request);
-
         var writerBuffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(writerBuffer, new JsonWriterOptions { Indented = false }))
         {
             writer.WriteStartObject();
             writer.WritePropertyName("acceptanceCriteria");
             WriteTextList(writer, request.AcceptanceCriteria);
+            writer.WritePropertyName("admissionFence");
+            if (request.AdmissionFence is null)
+            {
+                writer.WriteNullValue();
+            }
+            else
+            {
+                writer.WriteStartObject();
+                writer.WriteString("kind", request.AdmissionFence.Kind);
+                writer.WriteString("identifier", request.AdmissionFence.Identifier);
+                writer.WriteString("revision", request.AdmissionFence.Revision);
+                if (request.AdmissionFence.Fingerprint is null)
+                {
+                    writer.WriteNull("fingerprint");
+                }
+                else
+                {
+                    writer.WriteString("fingerprint", request.AdmissionFence.Fingerprint);
+                }
+
+                writer.WriteEndObject();
+            }
+
             writer.WritePropertyName("budget");
             writer.WriteStartObject();
             writer.WriteNumber("maximumDurationTicks", request.Budget.MaximumDuration?.Ticks ?? 0);
@@ -128,7 +129,9 @@ public static class DelegationRequestIdentity
             writer.WritePropertyName("constraints");
             WriteTextList(writer, request.Constraints);
             writer.WriteString("objective", NormalizeText(request.Objective));
-            writer.WriteNumber("strategy", (int)request.Strategy);
+            writer.WriteString("provider", request.Provider);
+            writer.WritePropertyName("requiredCapabilities");
+            WriteCapabilityRequirements(writer, request.RequiredCapabilities);
             writer.WritePropertyName("workspace");
             writer.WriteStartObject();
             writer.WriteString("identifier", request.Workspace.Identifier);
@@ -143,40 +146,6 @@ public static class DelegationRequestIdentity
 
             writer.WriteString("provider", request.Workspace.Provider);
             writer.WriteEndObject();
-            writer.WriteEndObject();
-            writer.Flush();
-        }
-
-        return Encoding.UTF8.GetString(writerBuffer.WrittenSpan);
-    }
-
-    private static string CanonicalizeV2(DelegationRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        DelegationRequestValidator.Validate(request);
-        ArgumentNullException.ThrowIfNull(request.PlanRevision);
-
-        var writerBuffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(writerBuffer, new JsonWriterOptions { Indented = false }))
-        {
-            writer.WriteStartObject();
-            writer.WritePropertyName("planRevision");
-            writer.WriteStartObject();
-            writer.WriteNumber("kind", (int)request.PlanRevision.Kind);
-            writer.WriteString("identifier", request.PlanRevision.Identifier);
-            writer.WriteString("revision", request.PlanRevision.Revision);
-            if (request.PlanRevision.CanonicalFingerprint is null)
-            {
-                writer.WriteNull("canonicalFingerprint");
-            }
-            else
-            {
-                writer.WriteString("canonicalFingerprint", request.PlanRevision.CanonicalFingerprint);
-            }
-
-            writer.WriteEndObject();
-            writer.WritePropertyName("request");
-            WriteRequestContent(writer, request);
             writer.WriteEndObject();
             writer.Flush();
         }
@@ -209,37 +178,26 @@ public static class DelegationRequestIdentity
         writer.WriteEndArray();
     }
 
-    private static void WriteRequestContent(Utf8JsonWriter writer, DelegationRequest request)
+    private static void WriteCapabilityRequirements(Utf8JsonWriter writer, IReadOnlyList<CapabilityRequirement> values)
     {
-        writer.WriteStartObject();
-        writer.WritePropertyName("acceptanceCriteria");
-        WriteTextList(writer, request.AcceptanceCriteria);
-        writer.WritePropertyName("budget");
-        writer.WriteStartObject();
-        writer.WriteNumber("maximumDurationTicks", request.Budget.MaximumDuration?.Ticks ?? 0);
-        writer.WriteNumber("maximumParallelWorkers", request.Budget.MaximumParallelWorkers);
-        writer.WriteNumber("maximumRetries", request.Budget.MaximumRetries);
-        writer.WriteNumber("maximumWorkerCalls", request.Budget.MaximumWorkerCalls);
-        writer.WriteEndObject();
-        writer.WritePropertyName("constraints");
-        WriteTextList(writer, request.Constraints);
-        writer.WriteString("objective", NormalizeText(request.Objective));
-        writer.WriteNumber("strategy", (int)request.Strategy);
-        writer.WritePropertyName("workspace");
-        writer.WriteStartObject();
-        writer.WriteString("identifier", request.Workspace.Identifier);
-        if (request.Workspace.Revision is null)
+        writer.WriteStartArray();
+        foreach (var requirement in values)
         {
-            writer.WriteNull("revision");
-        }
-        else
-        {
-            writer.WriteString("revision", request.Workspace.Revision);
+            writer.WriteStartObject();
+            writer.WriteString("name", requirement.Name);
+            writer.WriteNumber("minimumVersion", requirement.MinimumVersion);
+            writer.WritePropertyName("attributes");
+            writer.WriteStartObject();
+            foreach (var pair in requirement.Attributes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            {
+                writer.WriteString(pair.Key, pair.Value);
+            }
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
         }
 
-        writer.WriteString("provider", request.Workspace.Provider);
-        writer.WriteEndObject();
-        writer.WriteEndObject();
+        writer.WriteEndArray();
     }
 }
 

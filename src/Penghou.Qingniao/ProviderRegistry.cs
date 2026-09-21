@@ -3,57 +3,127 @@ using System.Text;
 
 namespace Penghou.Qingniao;
 
-/// <summary>Identifies the outcome of a provider selection operation.</summary>
-public enum ProviderSelectionStatus
+/// <summary>Identifies the outcome of resolving a caller-supplied provider identity.</summary>
+public enum ProviderResolutionStatus
 {
-    /// <summary>At least one registered provider matched the request.</summary>
-    Matched = 0,
+    /// <summary>The provider is registered, enabled, and satisfies the required capabilities.</summary>
+    Resolved = 0,
 
-    /// <summary>No enabled registered provider matched the request.</summary>
-    NoCompatibleProvider = 1,
+    /// <summary>No provider is registered for the supplied identity.</summary>
+    UnknownProvider = 1,
+
+    /// <summary>The provider is registered but disabled.</summary>
+    DisabledProvider = 2,
+
+    /// <summary>The provider is registered and enabled but does not satisfy a required capability.</summary>
+    IncompatibleProvider = 3,
 }
 
 /// <summary>
-/// The immutable result of selecting a provider. A no-match result is
-/// represented explicitly instead of using a nullable provider match.
+/// The immutable result of resolving one caller-supplied provider identity.
+/// Qingniao resolves, verifies, and rejects; it never chooses between providers.
 /// </summary>
-public sealed class ProviderSelectionResult
+public sealed class ProviderResolutionResult
 {
-    private ProviderSelectionResult(ProviderSelectionStatus status, ProviderMatch? match)
+    private ProviderResolutionResult(
+        ProviderResolutionStatus status,
+        string provider,
+        ProviderDescriptor? descriptor,
+        IReadOnlyList<string>? missingCapabilities)
     {
         if (!Enum.IsDefined(status))
         {
-            throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown provider selection status.");
+            throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown provider resolution status.");
         }
 
-        if ((status == ProviderSelectionStatus.Matched) != (match is not null))
+        Provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        if ((status == ProviderResolutionStatus.Resolved
+                || status == ProviderResolutionStatus.DisabledProvider
+                || status == ProviderResolutionStatus.IncompatibleProvider) != (descriptor is not null))
         {
-            throw new ArgumentException("A matched result requires a match and a no-match result must not contain one.", nameof(match));
+            throw new ArgumentException("A known-provider result requires a descriptor and an unknown-provider result must not contain one.", nameof(descriptor));
+        }
+
+        if ((status == ProviderResolutionStatus.IncompatibleProvider) != (missingCapabilities is not null && missingCapabilities.Count != 0))
+        {
+            throw new ArgumentException("An incompatible-provider result requires missing capabilities and no other result may contain them.", nameof(missingCapabilities));
         }
 
         Status = status;
-        Match = match;
+        Descriptor = descriptor;
+        MissingCapabilities = missingCapabilities ?? Array.Empty<string>();
     }
 
-    /// <summary>Creates a result containing the selected provider match.</summary>
-    public static ProviderSelectionResult Matched(ProviderMatch match)
+    /// <summary>Creates a result containing the resolved provider descriptor.</summary>
+    public static ProviderResolutionResult Resolved(ProviderDescriptor descriptor)
     {
-        ArgumentNullException.ThrowIfNull(match);
-        return new ProviderSelectionResult(ProviderSelectionStatus.Matched, match);
+        ArgumentNullException.ThrowIfNull(descriptor);
+        return new ProviderResolutionResult(ProviderResolutionStatus.Resolved, descriptor.Provider, descriptor, null);
     }
 
-    /// <summary>Creates an explicit result indicating that no provider matched.</summary>
-    public static ProviderSelectionResult NoCompatibleProvider() =>
-        new(ProviderSelectionStatus.NoCompatibleProvider, null);
+    /// <summary>Creates an explicit result indicating that no provider is registered for the identity.</summary>
+    public static ProviderResolutionResult UnknownProvider(string provider) =>
+        new(ProviderResolutionStatus.UnknownProvider, RequireProviderIdentity(provider), null, null);
 
-    /// <summary>Gets the selection outcome.</summary>
-    public ProviderSelectionStatus Status { get; }
+    /// <summary>Creates an explicit result indicating that the registered provider is disabled.</summary>
+    public static ProviderResolutionResult DisabledProvider(ProviderDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        return new ProviderResolutionResult(ProviderResolutionStatus.DisabledProvider, descriptor.Provider, descriptor, null);
+    }
 
-    /// <summary>Gets the selected match, or <see langword="null"/> when no provider matched.</summary>
-    public ProviderMatch? Match { get; }
+    /// <summary>Creates an explicit result indicating that the provider does not satisfy required capabilities.</summary>
+    public static ProviderResolutionResult IncompatibleProvider(
+        ProviderDescriptor descriptor,
+        IReadOnlyList<string> missingCapabilities)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(missingCapabilities);
+        if (missingCapabilities.Count == 0 || missingCapabilities.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("An incompatible-provider result requires at least one missing capability.", nameof(missingCapabilities));
+        }
 
-    /// <summary>Gets a value indicating whether a provider was selected.</summary>
-    public bool IsMatch => Status == ProviderSelectionStatus.Matched;
+        return new ProviderResolutionResult(
+            ProviderResolutionStatus.IncompatibleProvider,
+            descriptor.Provider,
+            descriptor,
+            Array.AsReadOnly(missingCapabilities.ToArray()));
+    }
+
+    /// <summary>Gets the resolution outcome.</summary>
+    public ProviderResolutionStatus Status { get; }
+
+    /// <summary>Gets the exact ordinal provider identity that was resolved.</summary>
+    public string Provider { get; }
+
+    /// <summary>Gets the registered descriptor, or <see langword="null"/> when the provider is unknown.</summary>
+    public ProviderDescriptor? Descriptor { get; }
+
+    /// <summary>Gets the required capability names the provider does not satisfy; empty unless incompatible.</summary>
+    public IReadOnlyList<string> MissingCapabilities { get; }
+
+    /// <summary>Gets a value indicating whether the provider resolved.</summary>
+    public bool IsResolved => Status == ProviderResolutionStatus.Resolved;
+
+    private static string RequireProviderIdentity(string? provider)
+    {
+        if (string.IsNullOrWhiteSpace(provider))
+        {
+            throw new ArgumentException("A non-empty provider identity is required.", nameof(provider));
+        }
+
+        if (provider.Length > 512
+            || provider.Normalize(System.Text.NormalizationForm.FormC) != provider
+            || provider != provider.Trim()
+            || provider.Contains('\r')
+            || provider.Contains('\n'))
+        {
+            throw new ArgumentException("A provider identity must already be in canonical form.", nameof(provider));
+        }
+
+        return provider;
+    }
 }
 
 /// <summary>The result of registering a provider descriptor.</summary>
@@ -119,17 +189,26 @@ public sealed class ProviderRegistrySnapshot
     /// <summary>Gets the registry revision represented by this snapshot.</summary>
     public long Revision { get; }
 
-    /// <summary>Returns all matching providers in deterministic selection order.</summary>
-    public IReadOnlyList<ProviderMatch> Match(ProviderSelectionRequest request) =>
-        ProviderSelection.Match(request, Providers);
-
-    /// <summary>Returns an explicit match or no-compatible-provider result.</summary>
-    public ProviderSelectionResult Select(ProviderSelectionRequest request)
+    /// <summary>Resolves one caller-supplied provider identity against this snapshot.</summary>
+    public ProviderResolutionResult Resolve(string provider, IReadOnlyList<CapabilityRequirement>? requiredCapabilities = null)
     {
-        var match = ProviderSelection.Select(request, Providers);
-        return match is null
-            ? ProviderSelectionResult.NoCompatibleProvider()
-            : ProviderSelectionResult.Matched(match);
+        ArgumentNullException.ThrowIfNull(provider);
+        var descriptor = Providers.FirstOrDefault(candidate =>
+            string.Equals(candidate.Provider, provider, StringComparison.Ordinal));
+        if (descriptor is null)
+        {
+            return ProviderResolutionResult.UnknownProvider(provider);
+        }
+
+        if (!descriptor.Enabled)
+        {
+            return ProviderResolutionResult.DisabledProvider(descriptor);
+        }
+
+        var missing = ProviderCapabilityVerification.MissingCapabilities(descriptor, requiredCapabilities);
+        return missing.Count == 0
+            ? ProviderResolutionResult.Resolved(descriptor)
+            : ProviderResolutionResult.IncompatibleProvider(descriptor, missing);
     }
 }
 
@@ -145,11 +224,12 @@ public interface IProviderRegistry
     /// <summary>Captures an immutable point-in-time registry view.</summary>
     ProviderRegistrySnapshot GetSnapshot();
 
-    /// <summary>Returns all providers matching the current registry snapshot.</summary>
-    IReadOnlyList<ProviderMatch> Match(ProviderSelectionRequest request);
-
-    /// <summary>Returns an explicit selected or no-compatible-provider result.</summary>
-    ProviderSelectionResult Select(ProviderSelectionRequest request);
+    /// <summary>
+    /// Resolves one caller-supplied provider identity: verifies registration
+    /// and availability, then verifies the required capabilities. Qingniao
+    /// never chooses between providers; the caller supplies the identity.
+    /// </summary>
+    ProviderResolutionResult Resolve(string provider, IReadOnlyList<CapabilityRequirement>? requiredCapabilities = null);
 }
 
 /// <summary>
@@ -229,11 +309,9 @@ public sealed class InMemoryProviderRegistry : IProviderRegistry
         }
     }
 
-    /// <summary>Returns all providers matching one captured registry snapshot.</summary>
-    public IReadOnlyList<ProviderMatch> Match(ProviderSelectionRequest request) => GetSnapshot().Match(request);
-
-    /// <summary>Returns an explicit selected or no-compatible-provider result.</summary>
-    public ProviderSelectionResult Select(ProviderSelectionRequest request) => GetSnapshot().Select(request);
+    /// <summary>Resolves one caller-supplied provider identity against one captured registry snapshot.</summary>
+    public ProviderResolutionResult Resolve(string provider, IReadOnlyList<CapabilityRequirement>? requiredCapabilities = null) =>
+        GetSnapshot().Resolve(provider, requiredCapabilities);
 
     private static void EnsureDescriptorCapacity(ProviderDescriptorFootprint footprint)
     {
@@ -272,7 +350,6 @@ internal readonly record struct ProviderDescriptorFootprint(
         var bytes = 0L;
         var attributes = 0;
         Add(provider.Provider);
-        Add(provider.Priority.ToString(CultureInfo.InvariantCulture));
         Add(provider.Enabled ? "1" : "0");
 
         foreach (var model in provider.Models.OrderBy(model => model, StringComparer.Ordinal))
@@ -305,7 +382,6 @@ internal static class ProviderDescriptorComparer
 {
     public static bool SemanticallyEqual(ProviderDescriptor left, ProviderDescriptor right) =>
         string.Equals(left.Provider, right.Provider, StringComparison.Ordinal)
-        && left.Priority == right.Priority
         && left.Enabled == right.Enabled
         && SequenceEqual(left.Models, right.Models, StringComparer.Ordinal)
         && CapabilitiesEqual(left.Capabilities, right.Capabilities);
@@ -355,5 +431,39 @@ internal static class ProviderDescriptorComparer
         }
 
         return true;
+    }
+}
+
+/// <summary>Verifies that one registered provider satisfies caller-required capabilities.</summary>
+internal static class ProviderCapabilityVerification
+{
+    /// <summary>Returns the required capability names the descriptor does not satisfy.</summary>
+    internal static IReadOnlyList<string> MissingCapabilities(
+        ProviderDescriptor descriptor,
+        IReadOnlyList<CapabilityRequirement>? requiredCapabilities)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (requiredCapabilities is null || requiredCapabilities.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var missing = new List<string>();
+        foreach (var requirement in requiredCapabilities)
+        {
+            ArgumentNullException.ThrowIfNull(requirement);
+            var satisfied = descriptor.Capabilities.Any(capability =>
+                string.Equals(capability.Name, requirement.Name, StringComparison.Ordinal)
+                && capability.Version >= requirement.MinimumVersion
+                && requirement.Attributes.All(pair =>
+                    capability.Attributes.TryGetValue(pair.Key, out var value)
+                    && string.Equals(value, pair.Value, StringComparison.Ordinal)));
+            if (!satisfied)
+            {
+                missing.Add(requirement.Name);
+            }
+        }
+
+        return Array.AsReadOnly(missing.ToArray());
     }
 }

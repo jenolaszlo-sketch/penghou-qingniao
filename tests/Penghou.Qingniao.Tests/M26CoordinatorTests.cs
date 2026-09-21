@@ -180,7 +180,7 @@ public sealed class M26CoordinatorTests
     }
 
     [Fact]
-    public async Task Insufficient_evaluator_budget_refuses_launch_with_budget_exceeded()
+    public async Task Evaluation_proceeds_without_repair_budget_preflight()
     {
         var validator = new FixedValidator("passed");
         var reviewer = new FixedReviewer("approved");
@@ -189,13 +189,9 @@ public sealed class M26CoordinatorTests
         var observed = await RunToResultPhaseAsync(coordinator, accepted.DelegationId);
         var terminal = await coordinator.PumpAsync(accepted.DelegationId, observed.Progress.Revision);
 
-        terminal.Progress.State.Should().Be(DelegationState.BudgetExceeded);
-        terminal.Progress.WorkerCalls.Should().Be(3);
-        terminal.Result!.BudgetExceeded.Should().NotBeNull();
-        terminal.Result.BudgetExceeded!.Consumed.Value.Should().Be(3);
-        terminal.Result.BudgetExceeded.Charge.Amount.Value.Should().Be(3);
-        validator.Calls.Should().Be(0);
-        reviewer.Calls.Should().Be(0);
+        terminal.Progress.State.Should().Be(DelegationState.Completed);
+        validator.Calls.Should().Be(1);
+        reviewer.Calls.Should().Be(1);
     }
 
     private static async Task<DelegationExecutionSnapshot> RunToResultPhaseAsync(
@@ -211,7 +207,8 @@ public sealed class M26CoordinatorTests
         IDeterministicCandidateValidator? validator,
         IIndependentCandidateReviewer? reviewer,
         ICandidateRevisionPublicationRegistry? registry = null,
-        CandidateProvider? provider = null)
+        CandidateProvider? provider = null,
+        ICandidateVerificationPolicy? policy = null)
     {
         var descriptor = new ProviderDescriptor("m26-provider", [new CapabilityDescriptor("agent.execute", 1)]);
         var providers = new InMemoryProviderRegistry();
@@ -222,20 +219,22 @@ public sealed class M26CoordinatorTests
         var captures = new InMemoryExternalOperationHandleCaptureRegistry();
         return (new InMemoryDelegationCoordinator(
             new InMemoryDelegationAcceptanceRegistry(),
-            new InMemoryWorkflowPlanResolver(),
+            null,
             providers,
             adapters,
-            new SimingExternalOperationSemanticFingerprintVerifier(),
+            new LocalSemanticFingerprintVerifier(),
             captures,
             now: () => Start,
             candidateRegistry: registry,
             candidateValidator: validator,
-            candidateReviewer: reviewer), provider);
+            candidateReviewer: reviewer,
+            verificationPolicy: policy ?? new LegacyMappingPolicy()), provider);
     }
 
     private static DelegationRequest Request(string key, int maximumWorkerCalls = 8) => new(
         key,
         "Implement the objective",
+        "m26-provider",
         new WorkspaceReference("local", "workspace", "revision"),
         ["The result is correct"],
         [],
@@ -302,6 +301,66 @@ public sealed class M26CoordinatorTests
                 candidate.Artifacts);
             return ValueTask.FromResult(new CandidateRevisionPublication(changed, true));
         }
+    }
+
+    private sealed class StubVerificationPolicy(
+        Func<CandidateVerificationInput, CandidateVerificationDecision>? decide = null,
+        int maxRounds = 1) : ICandidateVerificationPolicy
+    {
+        public int MaxVerificationRounds => maxRounds;
+
+        public List<CandidateVerificationInput> Seen { get; } = [];
+
+        public CandidateVerificationDecision Decide(CandidateVerificationInput input)
+        {
+            ArgumentNullException.ThrowIfNull(input);
+            Seen.Add(input);
+            return decide?.Invoke(input)
+                ?? CandidateVerificationDecision.Reject("No test decision was configured.");
+        }
+    }
+
+    /// <summary>
+    /// Host-side replica of the retired in-core outcome mapping: deterministic
+    /// validation must pass, independent review must approve, otherwise reject
+    /// or continue with the review concern. Product policy lives in tests/hosts now.
+    /// </summary>
+    private sealed class LegacyMappingPolicy(int maxRounds = 1) : ICandidateVerificationPolicy
+    {
+        public int MaxVerificationRounds => maxRounds;
+
+        public CandidateVerificationDecision Decide(CandidateVerificationInput input)
+        {
+            ArgumentNullException.ThrowIfNull(input);
+            var validationPass = input.Validation is not null
+                && input.ValidationFailure is null
+                && IsPass(input.Validation.Outcome);
+            var reviewApprove = input.Review is not null
+                && input.ReviewFailure is null
+                && IsApprove(input.Review.Outcome);
+            if (input.ValidationFailure is not null || input.Validation is null || !validationPass)
+            {
+                return CandidateVerificationDecision.Reject();
+            }
+
+            if (!reviewApprove)
+            {
+                return CandidateVerificationDecision.ContinueWithConstraint("Independent review rejected the candidate.");
+            }
+
+            return CandidateVerificationDecision.Accept();
+        }
+
+        private static bool IsPass(string outcome) =>
+            string.Equals(outcome, "passed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "pass", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "approved", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsApprove(string outcome) =>
+            string.Equals(outcome, "approved", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "approve", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "passed", StringComparison.OrdinalIgnoreCase);
     }
 
     private abstract class EvaluatorBase

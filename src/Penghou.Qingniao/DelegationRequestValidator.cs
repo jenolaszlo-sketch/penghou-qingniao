@@ -6,15 +6,15 @@ public static class DelegationRequestValidator
     private const int MaximumListItems = 256;
     private const int MaximumTotalTextLength = 1_048_576;
 
-    /// <summary>Validates request identity, content, budgets, and supported strategy.</summary>
+    /// <summary>Validates request identity, content, and budgets.</summary>
     /// <exception cref="ArgumentException">Thrown when required text is missing or non-canonical.</exception>
-    /// <exception cref="NotSupportedException">Thrown when the strategy is not implemented.</exception>
     public static void Validate(DelegationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         RequireCanonicalIdentityText(request.RequestKey, nameof(request.RequestKey), 256);
         RequireText(request.Objective, nameof(request.Objective), 16_384);
+        RequireCanonicalIdentityText(request.Provider, nameof(request.Provider), 512);
 
         ArgumentNullException.ThrowIfNull(request.Workspace);
         RequireCanonicalIdentityText(request.Workspace.Provider, nameof(request.Workspace.Provider), 128);
@@ -24,7 +24,7 @@ public static class DelegationRequestValidator
             RequireCanonicalIdentityText(request.Workspace.Revision, nameof(request.Workspace.Revision), 2_048);
         }
 
-        request.PlanRevision?.Validate();
+        request.AdmissionFence?.Validate();
 
         var totalTextLength = (long)request.RequestKey.Length + request.Objective.Length
             + request.Workspace.Provider.Length + request.Workspace.Identifier.Length
@@ -49,12 +49,6 @@ public static class DelegationRequestValidator
                 nameof(request.Budget.MaximumDuration),
                 duration,
                 "Maximum duration must be positive when supplied.");
-        }
-
-        if (request.Strategy != DelegationStrategy.Implement)
-        {
-            throw new NotSupportedException(
-                $"Delegation strategy '{request.Strategy}' is not supported by the initial runtime.");
         }
     }
 

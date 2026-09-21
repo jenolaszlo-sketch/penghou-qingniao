@@ -73,7 +73,7 @@ public sealed class M27CoordinatorTests
     }
 
     [Fact]
-    public async Task Correction_budget_boundary_records_actual_initial_work_without_fix()
+    public async Task Correction_is_not_preflight_budget_refused()
     {
         var corrector = new FixedCorrector();
         var (coordinator, _) = CreateCoordinator(new RevisionValidator(), new RevisionReviewer(), corrector);
@@ -82,13 +82,10 @@ public sealed class M27CoordinatorTests
 
         var terminal = await coordinator.PumpAsync(accepted.DelegationId, resultPhase.Progress.Revision);
 
-        terminal.Progress.State.Should().Be(DelegationState.BudgetExceeded);
-        terminal.Progress.WorkerCalls.Should().Be(5);
-        terminal.Result!.BudgetExceeded!.ActualConsumed.Value.Should().Be(5);
-        terminal.Result.BudgetExceeded.Consumed.Value.Should().Be(8);
-        terminal.Result.BudgetExceeded.RefusedCharge!.Amount.Value.Should().Be(3);
-        terminal.Result.Candidate!.Revision.Should().Be(1);
-        corrector.Calls.Should().Be(0);
+        terminal.Progress.State.Should().Be(DelegationState.Completed);
+        terminal.Result!.BudgetExceeded.Should().BeNull();
+        terminal.Result.Candidate!.Revision.Should().Be(2);
+        corrector.Calls.Should().Be(1);
     }
 
     [Fact]
@@ -124,19 +121,17 @@ public sealed class M27CoordinatorTests
     }
 
     [Fact]
-    public async Task Single_configured_evaluator_uses_one_call_for_budget_and_terminal_accounting()
+    public async Task Single_evaluator_failure_is_terminal_without_repair()
     {
         var validator = new RevisionValidator();
-        var (coordinator, _) = CreateCoordinator(validator, null, null);
+        var (coordinator, _) = CreateCoordinator(validator, null, null, policy: new LegacyMappingPolicy());
         var accepted = await coordinator.AcceptAsync(new DelegationCallerScope("caller"), Request("single-evaluator", 3));
         var resultPhase = await RunToResultPhaseAsync(coordinator, accepted.DelegationId);
 
         var terminal = await coordinator.PumpAsync(accepted.DelegationId, resultPhase.Progress.Revision);
 
-        terminal.Progress.State.Should().Be(DelegationState.BudgetExceeded);
-        terminal.Progress.WorkerCalls.Should().Be(resultPhase.Progress.WorkerCalls + 1);
-        terminal.Result!.BudgetExceeded!.Consumed.Value.Should().Be(3);
-        validator.Calls.Should().Be(0);
+        terminal.Progress.State.Should().Be(DelegationState.Failed);
+        validator.Calls.Should().Be(1);
     }
 
     [Fact]
@@ -232,7 +227,8 @@ public sealed class M27CoordinatorTests
         IDeterministicCandidateValidator? validator,
         IIndependentCandidateReviewer? reviewer,
         ICandidateCorrector? corrector,
-        bool confirmCancellation = false)
+        bool confirmCancellation = false,
+        ICandidateVerificationPolicy? policy = null)
     {
         var descriptor = new ProviderDescriptor("m27-provider", [new CapabilityDescriptor("agent.execute", 1)]);
         var providers = new InMemoryProviderRegistry();
@@ -242,19 +238,21 @@ public sealed class M27CoordinatorTests
         adapters.Register(descriptor, provider);
         return (new InMemoryDelegationCoordinator(
             new InMemoryDelegationAcceptanceRegistry(),
-            new InMemoryWorkflowPlanResolver(),
+            null,
             providers,
             adapters,
-            new SimingExternalOperationSemanticFingerprintVerifier(),
+            new LocalSemanticFingerprintVerifier(),
             now: () => Start,
             candidateValidator: validator,
             candidateReviewer: reviewer,
-            candidateCorrector: corrector), provider);
+            candidateCorrector: corrector,
+            verificationPolicy: policy ?? new CorrectOncePolicy()), provider);
     }
 
     private static DelegationRequest Request(string key, int maximumWorkerCalls = 8) => new(
         key,
         "Implement the objective",
+        "m27-provider",
         new WorkspaceReference("local", "workspace", "revision"),
         ["The result is correct"],
         [],
@@ -379,6 +377,83 @@ public sealed class M27CoordinatorTests
     {
         public ValueTask<CandidateCorrectionOutcome> CorrectAsync(CandidateCorrectionRequest request, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new CandidateCorrectionOutcome(request.SourceCandidate, new WorkerInvocationEvidence(request.SourceCandidate.DelegationId, request.SourceCandidate.StructuralNode, request.SourceCandidate.NodeGeneration, EvidenceKinds.AgentExecution, new ProviderExecutionAttemptReference("m27-provider", "bad", "bad"), "succeeded", Start, Start.AddMinutes(1), "agent.execute", "implement", "m27-provider", null, "model", [], request.SourceCandidate.Artifacts, request.SourceCandidate.Artifacts, request.SourceCandidate)));
+    }
+
+    /// <summary>
+    /// Host-side replica of the retired in-core outcome mapping, plus exactly
+    /// one checkpoint-local re-execution when the first round fails. Repair
+    /// policy lives in tests/hosts now, never in Qingniao core.
+    /// </summary>
+    private sealed class CorrectOncePolicy : ICandidateVerificationPolicy
+    {
+        public int MaxVerificationRounds => 2;
+
+        public CandidateVerificationDecision Decide(CandidateVerificationInput input)
+        {
+            ArgumentNullException.ThrowIfNull(input);
+            if (input.Round == 1
+                && input.ValidationFailure is null
+                && input.ReviewFailure is null)
+            {
+                var failing = input.Validation is null
+                    || input.Review is null
+                    || !IsPass(input.Validation.Outcome)
+                    || !IsApprove(input.Review.Outcome);
+                if (failing)
+                {
+                    return CandidateVerificationDecision.RequestLocalReexecution();
+                }
+            }
+
+            return LegacyMappingPolicy.DecideStatic(input);
+        }
+
+        private static bool IsPass(string outcome) =>
+            LegacyMappingPolicy.IsPass(outcome);
+
+        private static bool IsApprove(string outcome) =>
+            LegacyMappingPolicy.IsApprove(outcome);
+    }
+
+    private sealed class LegacyMappingPolicy : ICandidateVerificationPolicy
+    {
+        public int MaxVerificationRounds => 1;
+
+        public CandidateVerificationDecision Decide(CandidateVerificationInput input) =>
+            DecideStatic(input);
+
+        internal static CandidateVerificationDecision DecideStatic(CandidateVerificationInput input)
+        {
+            ArgumentNullException.ThrowIfNull(input);
+            var validationPass = input.Validation is not null
+                && input.ValidationFailure is null
+                && IsPass(input.Validation.Outcome);
+            var reviewApprove = input.Review is not null
+                && input.ReviewFailure is null
+                && IsApprove(input.Review.Outcome);
+            if (input.ValidationFailure is not null || input.Validation is null || !validationPass)
+            {
+                return CandidateVerificationDecision.Reject();
+            }
+
+            if (!reviewApprove)
+            {
+                return CandidateVerificationDecision.ContinueWithConstraint("Independent review rejected the candidate.");
+            }
+
+            return CandidateVerificationDecision.Accept();
+        }
+
+        internal static bool IsPass(string outcome) =>
+            string.Equals(outcome, "passed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "pass", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "approved", StringComparison.OrdinalIgnoreCase);
+
+        internal static bool IsApprove(string outcome) =>
+            string.Equals(outcome, "approved", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "approve", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "passed", StringComparison.OrdinalIgnoreCase);
     }
 
     private abstract class EvaluatorBase

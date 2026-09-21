@@ -336,19 +336,22 @@ public sealed record ContextProvenanceReference
     public string? ContentHash { get; }
 
     /// <summary>
-    /// Performs the CangjieSnapshot contract operation.
+    /// Creates a context-snapshot provenance reference for a provider-supplied snapshot.
     /// </summary>
-    public static ContextProvenanceReference CangjieSnapshot(
+    public static ContextProvenanceReference Snapshot(
+        string provider,
         string identifier,
-        string? contentHash = null) => new("cangjie", "context-snapshot", identifier, null, contentHash);
+        string? contentHash = null) => new(provider, "context-snapshot", identifier, null, contentHash);
 
     /// <summary>
-    /// Performs the HetuIndexPublication contract operation.
+    /// Creates a provenance reference for a provider-published artifact generation.
     /// </summary>
-    public static ContextProvenanceReference HetuIndexPublication(
-        string repositoryIdentifier,
-        string indexRunIdentifier,
-        string? indexIdentity = null) => new("hetu", "index-publication", repositoryIdentifier, indexRunIdentifier, indexIdentity);
+    public static ContextProvenanceReference Publication(
+        string provider,
+        string kind,
+        string identifier,
+        string? revision = null,
+        string? contentHash = null) => new(provider, kind, identifier, revision, contentHash);
 }
 
 /// <summary>Bounded context package for one exact waiting checkpoint.</summary>

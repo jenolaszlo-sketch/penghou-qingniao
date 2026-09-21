@@ -145,16 +145,15 @@ public sealed class InMemoryDelegationCoordinatorTests
         adapters.Register(descriptor, provider);
         var acceptanceRegistry = new InMemoryDelegationAcceptanceRegistry();
         var request = CreateRequest("preaccepted");
-        var bound = new InMemoryWorkflowPlanResolver().Resolve(Caller(), request).BoundRequest!;
-        var preaccepted = await acceptanceRegistry.AcceptAsync(Caller(), bound, TestContext.Current.CancellationToken);
+        var preaccepted = await acceptanceRegistry.AcceptAsync(Caller(), request, TestContext.Current.CancellationToken);
 
         var captures = new InMemoryExternalOperationHandleCaptureRegistry();
         var coordinator = new InMemoryDelegationCoordinator(
             acceptanceRegistry,
-            new InMemoryWorkflowPlanResolver(),
+            null,
             providers,
             adapters,
-            new SimingExternalOperationSemanticFingerprintVerifier(),
+            new LocalSemanticFingerprintVerifier(),
             captures,
             now: () => Start);
 
@@ -349,10 +348,10 @@ public sealed class InMemoryDelegationCoordinatorTests
         var captures = new InMemoryExternalOperationHandleCaptureRegistry();
         var coordinator = new InMemoryDelegationCoordinator(
             acceptanceRegistry ?? new InMemoryDelegationAcceptanceRegistry(),
-            new InMemoryWorkflowPlanResolver(),
+            null,
             providers,
             adapters,
-            new SimingExternalOperationSemanticFingerprintVerifier(),
+            new LocalSemanticFingerprintVerifier(),
             captures,
             now: now ?? (() => Start));
         return (coordinator, captures);
@@ -367,6 +366,7 @@ public sealed class InMemoryDelegationCoordinatorTests
         TimeSpan? maximumDuration = null) => new(
         requestKey,
         "Implement the objective",
+        "fake-provider",
         new WorkspaceReference("local", "workspace", "revision"),
         ["The result is correct"],
         [],

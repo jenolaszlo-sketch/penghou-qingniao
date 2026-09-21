@@ -8,11 +8,11 @@ public sealed class ProviderAdapterCatalogTests
     public void Registration_is_idempotent_only_for_the_same_adapter_instance()
     {
         var catalog = new InMemoryExternalOperationProviderCatalog();
-        var descriptor = Provider("provider-a", priority: 4);
+        var descriptor = Provider("provider-a");
         var adapter = new StubProvider();
 
         var first = catalog.Register(descriptor, adapter);
-        var replay = catalog.Register(Provider("provider-a", priority: 4), adapter);
+        var replay = catalog.Register(Provider("provider-a"), adapter);
 
         first.IsNew.Should().BeTrue();
         replay.IsNew.Should().BeFalse();
@@ -41,9 +41,9 @@ public sealed class ProviderAdapterCatalogTests
     {
         var catalog = new InMemoryExternalOperationProviderCatalog();
         var adapter = new StubProvider();
-        catalog.Register(Provider("provider-a", priority: 1), adapter);
+        catalog.Register(Provider("provider-a", capabilityVersion: 1), adapter);
 
-        var result = catalog.Lookup(Provider("provider-a", priority: 2));
+        var result = catalog.Lookup(Provider("provider-a", capabilityVersion: 2));
 
         result.Status.Should().Be(ProviderAdapterLookupStatus.Unauthorized);
         result.IsFound.Should().BeFalse();
@@ -65,18 +65,16 @@ public sealed class ProviderAdapterCatalogTests
     }
 
     [Fact]
-    public void A_match_uses_its_descriptor_identity_and_capabilities_do_not_register_adapters()
+    public void Lookup_requires_the_exact_registered_descriptor_and_claims_do_not_register_adapters()
     {
         var catalog = new InMemoryExternalOperationProviderCatalog();
         var descriptor = Provider("provider-a");
         var adapter = new StubProvider();
         catalog.Register(descriptor, adapter);
-        var match = new ProviderMatch(
-            descriptor,
-            [new CapabilityDescriptor("different.selected.claim", 99)],
-            hintScore: 0);
 
-        catalog.Lookup(match).Adapter.Should().BeSameAs(adapter);
+        catalog.Lookup(descriptor).Adapter.Should().BeSameAs(adapter);
+        catalog.Lookup(Provider("provider-a", capabilityVersion: 2)).Status
+            .Should().Be(ProviderAdapterLookupStatus.Unauthorized);
         catalog.Lookup(Provider("provider-unregistered")).Status
             .Should().Be(ProviderAdapterLookupStatus.Missing);
         catalog.GetSnapshot().Count.Should().Be(1);
@@ -150,8 +148,8 @@ public sealed class ProviderAdapterCatalogTests
         catalog.GetSnapshot().Revision.Should().Be(2);
     }
 
-    private static ProviderDescriptor Provider(string name, int priority = 0, bool enabled = true) =>
-        new(name, [new CapabilityDescriptor("agent.execute", 1)], priority, enabled);
+    private static ProviderDescriptor Provider(string name, int capabilityVersion = 1, bool enabled = true) =>
+        new(name, [new CapabilityDescriptor("agent.execute", capabilityVersion)], enabled);
 
     private sealed class StubProvider : IExternalOperationProvider
     {

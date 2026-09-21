@@ -8,3 +8,26 @@ Penghou.Qingniao.ExternalOperationResult.ExternalOperationResult(Penghou.Qingnia
 Penghou.Qingniao.ExternalOperationProviderException
 Penghou.Qingniao.ExternalOperationProviderException.ExternalOperationProviderException(Penghou.Qingniao.ExternalOperationFailure! failure) -> void
 Penghou.Qingniao.ExternalOperationProviderException.Failure.get -> Penghou.Qingniao.ExternalOperationFailure!
+Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier.Compute(Penghou.Qingniao.ExternalOperationSemanticInputEnvelope! semanticInput) -> string!
+Penghou.Qingniao.DelegationRequest.Provider.get -> string!
+Penghou.Qingniao.DelegationRequest.RequiredCapabilities.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityRequirement!>!
+Penghou.Qingniao.ProviderDescriptor.ProviderDescriptor(string! provider, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityDescriptor!>! capabilities, bool enabled = true, System.Collections.Generic.IReadOnlyList<string!>? models = null) -> void
+Penghou.Qingniao.DelegationRequest.DelegationRequest(string! requestKey, string! objective, string! provider, Penghou.Qingniao.WorkspaceReference! workspace, System.Collections.Generic.IReadOnlyList<string!>! acceptanceCriteria, System.Collections.Generic.IReadOnlyList<string!>! constraints, Penghou.Qingniao.DelegationBudget! budget, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityRequirement!>? requiredCapabilities = null, Penghou.Qingniao.DelegationAdmissionFence? admissionFence = null) -> void
+Penghou.Qingniao.DelegationRequest.AdmissionFence.get -> Penghou.Qingniao.DelegationAdmissionFence?
+Penghou.Qingniao.DelegationAdmissionFence
+Penghou.Qingniao.DelegationAdmissionFence.DelegationAdmissionFence(string! kind, string! identifier, string! revision, string? fingerprint = null) -> void
+Penghou.Qingniao.DelegationAdmissionFence.Fingerprint.get -> string?
+Penghou.Qingniao.DelegationAdmissionFence.Identifier.get -> string!
+Penghou.Qingniao.DelegationAdmissionFence.Kind.get -> string!
+Penghou.Qingniao.DelegationAdmissionFence.Revision.get -> string!
+Penghou.Qingniao.DelegationAdmissionFence.Validate() -> void
+Penghou.Qingniao.SupervisionSessionReference
+Penghou.Qingniao.SupervisionSessionReference.SupervisionSessionReference() -> void
+Penghou.Qingniao.SupervisionSessionReference.SupervisionSessionReference(string! identifier) -> void
+Penghou.Qingniao.SupervisionSessionReference.Identifier.get -> string!
+Penghou.Qingniao.SupervisionSessionReference.Validate() -> void
+Penghou.Qingniao.SupervisorCheckpointDescriptor.SupervisorCheckpointDescriptor(Penghou.Qingniao.SupervisorCheckpointId checkpointId, Penghou.Qingniao.SupervisionSessionReference session, Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.DelegationAdmissionFence? fence, Penghou.Qingniao.WorkflowRunExecutionReference! workflowRun, Penghou.Qingniao.StructuralNodeReference structuralNode, Penghou.Qingniao.NodeGenerationId nodeGeneration, long expectedObservableRevision, bool dependentProgressGated) -> void
+Penghou.Qingniao.SupervisorCheckpointDescriptor.Session.get -> Penghou.Qingniao.SupervisionSessionReference
+Penghou.Qingniao.SupervisorCheckpointDescriptor.Fence.get -> Penghou.Qingniao.DelegationAdmissionFence?
+static Penghou.Qingniao.ContextProvenanceReference.Snapshot(string! provider, string! identifier, string? contentHash = null) -> Penghou.Qingniao.ContextProvenanceReference!
+static Penghou.Qingniao.ContextProvenanceReference.Publication(string! provider, string! kind, string! identifier, string? revision = null, string? contentHash = null) -> Penghou.Qingniao.ContextProvenanceReference!

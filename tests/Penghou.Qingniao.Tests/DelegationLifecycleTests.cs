@@ -287,9 +287,9 @@ public sealed class DelegationLifecycleTests
     {
         var act = () => new SupervisorCheckpointDescriptor(
             new SupervisorCheckpointId(Guid.Parse("00000000-0000-0000-0000-000000000010")),
-            new HongxianSessionReference("session-1"),
+            new SupervisionSessionReference("session-1"),
             new DelegationId(Guid.Parse("00000000-0000-0000-0000-000000000001")),
-            WorkflowPlanRevisionReference.BuiltInPreset("Implement", "1"),
+            new DelegationAdmissionFence("plan", "implement", "1"),
             new WorkflowRunExecutionReference("zhinu", "run-1", "epoch-1"),
             new StructuralNodeReference("implement"),
             new NodeGenerationId(Guid.Parse("00000000-0000-0000-0000-000000000011")),
@@ -514,9 +514,9 @@ public sealed class DelegationLifecycleTests
         long expectedRevision,
         SupervisorCheckpointId? checkpointId = null) => new(
         checkpointId ?? new SupervisorCheckpointId(Guid.Parse("00000000-0000-0000-0000-000000000010")),
-        new HongxianSessionReference("session-1"),
+        new SupervisionSessionReference("session-1"),
         delegationId,
-        WorkflowPlanRevisionReference.BuiltInPreset("Implement", "1"),
+        new DelegationAdmissionFence("plan", "implement", "1"),
         new WorkflowRunExecutionReference("zhinu", "run-1", "epoch-1"),
         new StructuralNodeReference("implement"),
         new NodeGenerationId(Guid.Parse("00000000-0000-0000-0000-000000000011")),

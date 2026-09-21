@@ -738,72 +738,6 @@ public static class BudgetAccounting
     }
 }
 
-/// <summary>Provider/model/profile preferences expressed as open identities.</summary>
-public sealed record ProviderHints
-{
-    /// <summary>
-    /// Provides the MaximumPreferredProviders contract constant.
-    /// </summary>
-    public const int MaximumPreferredProviders = 16;
-    /// <summary>
-    /// Provides the MaximumPreferredModels contract constant.
-    /// </summary>
-    public const int MaximumPreferredModels = 16;
-
-    /// <summary>
-    /// Initializes a new instance of the ProviderHints type.
-    /// </summary>
-    public ProviderHints(
-        string? provider = null,
-        string? model = null,
-        string? profile = null,
-        IReadOnlyList<string>? preferredProviders = null,
-        IReadOnlyList<string>? preferredModels = null)
-    {
-        Provider = Optional(provider, nameof(provider));
-        Model = Optional(model, nameof(model));
-        Profile = Optional(profile, nameof(profile));
-        PreferredProviders = Names(preferredProviders, MaximumPreferredProviders, nameof(preferredProviders));
-        PreferredModels = Names(preferredModels, MaximumPreferredModels, nameof(preferredModels));
-    }
-
-    /// <summary>
-    /// Gets the Provider value.
-    /// </summary>
-    public string? Provider { get; }
-    /// <summary>
-    /// Gets the Model value.
-    /// </summary>
-    public string? Model { get; }
-    /// <summary>
-    /// Gets the Profile value.
-    /// </summary>
-    public string? Profile { get; }
-    /// <summary>
-    /// Gets the PreferredProviders value.
-    /// </summary>
-    public IReadOnlyList<string> PreferredProviders { get; }
-    /// <summary>
-    /// Gets the PreferredModels value.
-    /// </summary>
-    public IReadOnlyList<string> PreferredModels { get; }
-
-    private static string? Optional(string? value, string parameterName) =>
-        value is null ? null : IdentityText.Require(value, parameterName, 512);
-
-    private static IReadOnlyList<string> Names(IReadOnlyList<string>? values, int maximum, string parameterName)
-    {
-        if (values is null || values.Count == 0) return Array.Empty<string>();
-        if (values.Count > maximum) throw new ArgumentException($"A provider hint list cannot contain more than {maximum} values.", parameterName);
-        var result = values.Select(value => IdentityText.Require(value, parameterName, 512)).ToArray();
-        if (result.Distinct(StringComparer.Ordinal).Count() != result.Length)
-        {
-            throw new ArgumentException("Provider hint lists cannot contain duplicate values.", parameterName);
-        }
-
-        return Array.AsReadOnly(result);
-    }
-}
 
 /// <summary>An open, versioned capability advertised by an authorized provider.</summary>
 public sealed record CapabilityDescriptor
@@ -887,7 +821,7 @@ public sealed record CapabilityRequirement
     public IReadOnlyDictionary<string, string> Attributes { get; }
 }
 
-/// <summary>Host-authorized provider metadata used by the pure selector.</summary>
+/// <summary>Host-authorized provider metadata: identity, capabilities, and availability.</summary>
 public sealed record ProviderDescriptor
 {
     /// <summary>
@@ -896,7 +830,6 @@ public sealed record ProviderDescriptor
     public ProviderDescriptor(
         string provider,
         IReadOnlyList<CapabilityDescriptor> capabilities,
-        int priority = 0,
         bool enabled = true,
         IReadOnlyList<string>? models = null)
     {
@@ -909,9 +842,7 @@ public sealed record ProviderDescriptor
             throw new ArgumentException("Provider capabilities must be non-null and unique by name.", nameof(capabilities));
         }
 
-        if (priority is < -1_000_000 or > 1_000_000) throw new ArgumentOutOfRangeException(nameof(priority));
         Capabilities = Array.AsReadOnly(copy);
-        Priority = priority;
         Enabled = enabled;
         string[] modelCopy = models is null
             ? []
@@ -934,10 +865,6 @@ public sealed record ProviderDescriptor
     /// </summary>
     public IReadOnlyList<CapabilityDescriptor> Capabilities { get; }
     /// <summary>
-    /// Gets the Priority value.
-    /// </summary>
-    public int Priority { get; }
-    /// <summary>
     /// Gets the Enabled value.
     /// </summary>
     public bool Enabled { get; }
@@ -947,136 +874,3 @@ public sealed record ProviderDescriptor
     public IReadOnlyList<string> Models { get; }
 }
 
-/// <summary>
-/// Represents the ProviderSelectionRequest contract and its invariants.
-/// </summary>
-public sealed record ProviderSelectionRequest
-{
-    /// <summary>
-    /// Initializes a new instance of the ProviderSelectionRequest type.
-    /// </summary>
-    public ProviderSelectionRequest(IReadOnlyList<CapabilityRequirement> requiredCapabilities, ProviderHints? hints = null)
-    {
-        ArgumentNullException.ThrowIfNull(requiredCapabilities);
-        if (requiredCapabilities.Count == 0 || requiredCapabilities.Count > 32) throw new ArgumentException("A provider request must require 1 to 32 capabilities.", nameof(requiredCapabilities));
-        if (requiredCapabilities.Any(requirement => requirement is null) || requiredCapabilities.Select(requirement => requirement.Name).Distinct(StringComparer.Ordinal).Count() != requiredCapabilities.Count)
-        {
-            throw new ArgumentException("Required capabilities must be non-null and unique by name.", nameof(requiredCapabilities));
-        }
-
-        RequiredCapabilities = Array.AsReadOnly(requiredCapabilities.ToArray());
-        Hints = hints ?? new ProviderHints();
-    }
-
-    /// <summary>
-    /// Gets the RequiredCapabilities value.
-    /// </summary>
-    public IReadOnlyList<CapabilityRequirement> RequiredCapabilities { get; }
-    /// <summary>
-    /// Gets the Hints value.
-    /// </summary>
-    public ProviderHints Hints { get; }
-}
-
-/// <summary>
-/// Represents the ProviderMatch contract and its invariants.
-/// </summary>
-public sealed record ProviderMatch
-{
-    /// <summary>
-    /// Initializes a new instance of the ProviderMatch type.
-    /// </summary>
-    public ProviderMatch(ProviderDescriptor provider, IReadOnlyList<CapabilityDescriptor> capabilities, int hintScore)
-    {
-        ArgumentNullException.ThrowIfNull(provider);
-        ArgumentNullException.ThrowIfNull(capabilities);
-        if (hintScore < 0) throw new ArgumentOutOfRangeException(nameof(hintScore));
-        if (capabilities.Count == 0 || capabilities.Count > 32 || capabilities.Any(capability => capability is null)
-            || capabilities.Select(capability => capability.Name).Distinct(StringComparer.Ordinal).Count() != capabilities.Count)
-        {
-            throw new ArgumentException("A provider match must contain 1 to 32 unique capabilities.", nameof(capabilities));
-        }
-
-        Provider = provider;
-        Capabilities = Array.AsReadOnly(capabilities.ToArray());
-        HintScore = hintScore;
-    }
-
-    /// <summary>
-    /// Gets the Provider value.
-    /// </summary>
-    public ProviderDescriptor Provider { get; }
-    /// <summary>
-    /// Gets the Capabilities value.
-    /// </summary>
-    public IReadOnlyList<CapabilityDescriptor> Capabilities { get; }
-    /// <summary>
-    /// Gets the HintScore value.
-    /// </summary>
-    public int HintScore { get; }
-}
-
-/// <summary>Deterministic provider matching; no vendor/model enum is involved.</summary>
-public static class ProviderSelection
-{
-    /// <summary>
-    /// Performs the Match contract operation.
-    /// </summary>
-    public static IReadOnlyList<ProviderMatch> Match(
-        ProviderSelectionRequest request,
-        IReadOnlyList<ProviderDescriptor> providers)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(providers);
-        if (providers.Count > 128) throw new ArgumentException("A selection set cannot contain more than 128 providers.", nameof(providers));
-        var matches = new List<ProviderMatch>();
-        foreach (var provider in providers)
-        {
-            ArgumentNullException.ThrowIfNull(provider);
-            if (!provider.Enabled) continue;
-            var capabilities = new List<CapabilityDescriptor>();
-            var valid = true;
-            foreach (var requirement in request.RequiredCapabilities)
-            {
-                var capability = provider.Capabilities.FirstOrDefault(candidate =>
-                    candidate.Name == requirement.Name
-                    && candidate.Version >= requirement.MinimumVersion
-                    && requirement.Attributes.All(pair => candidate.Attributes.TryGetValue(pair.Key, out var value) && value == pair.Value));
-                if (capability is null) { valid = false; break; }
-                capabilities.Add(capability);
-            }
-
-            if (!valid) continue;
-            var hints = request.Hints ?? new ProviderHints();
-            var hintScore = 0;
-            if (hints.Provider == provider.Provider) hintScore += 1_000;
-            var providerIndex = -1;
-            for (var index = 0; index < hints.PreferredProviders.Count; index++)
-            {
-                if (string.Equals(hints.PreferredProviders[index], provider.Provider, StringComparison.Ordinal))
-                {
-                    providerIndex = index;
-                    break;
-                }
-            }
-
-            if (providerIndex >= 0) hintScore += 100 - providerIndex;
-            if (hints.Model is not null && provider.Models.Contains(hints.Model, StringComparer.Ordinal)) hintScore += 100;
-            hintScore += hints.PreferredModels.Count(model => provider.Models.Contains(model, StringComparer.Ordinal));
-            matches.Add(new ProviderMatch(provider, capabilities, hintScore));
-        }
-
-        return matches
-            .OrderByDescending(match => match.HintScore)
-            .ThenByDescending(match => match.Provider.Priority)
-            .ThenBy(match => match.Provider.Provider, StringComparer.Ordinal)
-            .Select(match => match)
-            .ToArray();
-    }
-
-    /// <summary>
-    /// Performs the Select contract operation.
-    /// </summary>
-    public static ProviderMatch? Select(ProviderSelectionRequest request, IReadOnlyList<ProviderDescriptor> providers) =>
-        Match(request, providers).FirstOrDefault();
-}

@@ -193,29 +193,6 @@ public sealed record DelegationArtifactReference
 }
 
 /// <summary>
-/// Represents the DelegationStrategy contract and its invariants.
-/// </summary>
-public enum DelegationStrategy
-{
-    /// <summary>
-    /// Identifies the Implement enum value.
-    /// </summary>
-    Implement = 0,
-    /// <summary>
-    /// Identifies the Investigate enum value.
-    /// </summary>
-    Investigate = 1,
-    /// <summary>
-    /// Identifies the Review enum value.
-    /// </summary>
-    Review = 2,
-    /// <summary>
-    /// Identifies the Fix enum value.
-    /// </summary>
-    Fix = 3,
-}
-
-/// <summary>
 /// Represents the DelegationState contract and its invariants.
 /// </summary>
 public enum DelegationState
@@ -402,21 +379,23 @@ public sealed record DelegationRequest
     public DelegationRequest(
         string requestKey,
         string objective,
+        string provider,
         WorkspaceReference workspace,
         IReadOnlyList<string> acceptanceCriteria,
         IReadOnlyList<string> constraints,
         DelegationBudget budget,
-        DelegationStrategy strategy = DelegationStrategy.Implement,
-        WorkflowPlanRevisionReference? planRevision = null)
+        IReadOnlyList<CapabilityRequirement>? requiredCapabilities = null,
+        DelegationAdmissionFence? admissionFence = null)
     {
         RequestKey = requestKey;
         Objective = objective;
+        Provider = IdentityText.Require(provider, nameof(provider), 512);
         Workspace = workspace;
         AcceptanceCriteria = Snapshot(acceptanceCriteria, nameof(acceptanceCriteria));
         Constraints = Snapshot(constraints, nameof(constraints));
         Budget = budget;
-        Strategy = strategy;
-        PlanRevision = planRevision;
+        RequiredCapabilities = SnapshotCapabilities(requiredCapabilities, nameof(requiredCapabilities));
+        AdmissionFence = admissionFence;
     }
 
     /// <summary>
@@ -427,6 +406,11 @@ public sealed record DelegationRequest
     /// Gets the Objective value.
     /// </summary>
     public string Objective { get; }
+    /// <summary>
+    /// Gets the caller-supplied provider identity. Qingniao resolves this
+    /// exact provider; it never chooses between providers.
+    /// </summary>
+    public string Provider { get; }
     /// <summary>
     /// Gets the Workspace value.
     /// </summary>
@@ -444,14 +428,39 @@ public sealed record DelegationRequest
     /// </summary>
     public DelegationBudget Budget { get; }
     /// <summary>
-    /// Gets the Strategy value.
+    /// Gets the optional external fence bound at admission. Host admission
+    /// policy verifies the fence; Qingniao never interprets it.
     /// </summary>
-    public DelegationStrategy Strategy { get; }
+    public DelegationAdmissionFence? AdmissionFence { get; }
     /// <summary>
-    /// The optional plan binding used by the v2 fingerprint contract. Existing
-    /// v1 requests intentionally remain valid without this field.
+    /// Gets the caller-required provider capabilities verified at resolution.
+    /// Empty means no capability requirement beyond registration and availability.
     /// </summary>
-    public WorkflowPlanRevisionReference? PlanRevision { get; }
+    public IReadOnlyList<CapabilityRequirement> RequiredCapabilities { get; }
+
+    private static IReadOnlyList<CapabilityRequirement> SnapshotCapabilities(
+        IReadOnlyList<CapabilityRequirement>? values,
+        string parameterName)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return Array.Empty<CapabilityRequirement>();
+        }
+
+        if (values.Count > 32)
+        {
+            throw new ArgumentException("A request cannot require more than 32 capabilities.", parameterName);
+        }
+
+        var copy = values.ToArray();
+        if (copy.Any(requirement => requirement is null)
+            || copy.Select(requirement => requirement.Name).Distinct(StringComparer.Ordinal).Count() != copy.Length)
+        {
+            throw new ArgumentException("Required capabilities must be non-null and unique by name.", parameterName);
+        }
+
+        return Array.AsReadOnly(copy);
+    }
 
     private static IReadOnlyList<string> Snapshot(IReadOnlyList<string> values, string parameterName)
     {

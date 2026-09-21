@@ -11,7 +11,6 @@ public sealed class ProviderRegistryTests
         var provider = Provider(
             "provider-a",
             [Capability("agent.execute", 2, ("workspace", "isolated"))],
-            priority: 7,
             models: ["model-b", "model-a"]);
 
         var first = registry.Register(provider);
@@ -19,7 +18,6 @@ public sealed class ProviderRegistryTests
         var replay = registry.Register(Provider(
             "provider-a",
             [Capability("agent.execute", 2, ("workspace", "isolated"))],
-            priority: 7,
             models: ["model-a", "model-b"]));
 
         first.IsNew.Should().BeTrue();
@@ -35,10 +33,10 @@ public sealed class ProviderRegistryTests
     public void Conflicting_identity_is_rejected_without_mutating_registry()
     {
         var registry = new InMemoryProviderRegistry();
-        var existing = Provider("provider-a", [Capability("agent.execute", 1)], priority: 1);
+        var existing = Provider("provider-a", [Capability("agent.execute", 1)]);
         registry.Register(existing);
 
-        var conflicting = Provider("provider-a", [Capability("agent.execute", 2)], priority: 1);
+        var conflicting = Provider("provider-a", [Capability("agent.execute", 2)]);
         var act = () => registry.Register(conflicting);
 
         var exception = act.Should().Throw<ProviderRegistrationConflictException>().Which;
@@ -66,35 +64,75 @@ public sealed class ProviderRegistryTests
     }
 
     [Fact]
-    public void Selection_is_deterministic_and_uses_one_snapshot()
+    public void Resolution_returns_the_exact_supplied_identity_from_one_snapshot()
     {
         var registry = new InMemoryProviderRegistry();
-        registry.Register(Provider("provider-z", [Capability("agent.execute", 1)], priority: 100));
-        registry.Register(Provider("provider-b", [Capability("agent.execute", 1)], priority: 1));
-        registry.Register(Provider("provider-a", [Capability("agent.execute", 1)], priority: 1));
-        var request = new ProviderSelectionRequest([new CapabilityRequirement("agent.execute", 1)]);
+        registry.Register(Provider("provider-z", [Capability("agent.execute", 1)]));
+        registry.Register(Provider("provider-b", [Capability("agent.execute", 1)]));
+        registry.Register(Provider("provider-a", [Capability("agent.execute", 1)]));
+        var snapshot = registry.GetSnapshot();
 
-        registry.Match(request).Select(match => match.Provider.Provider)
-            .Should().Equal("provider-z", "provider-a", "provider-b");
-        var selected = registry.Select(request);
-        selected.IsMatch.Should().BeTrue();
-        selected.Status.Should().Be(ProviderSelectionStatus.Matched);
-        selected.Match!.Provider.Provider.Should().Be("provider-z");
+        var resolved = snapshot.Resolve("provider-b", [new CapabilityRequirement("agent.execute", 1)]);
+
+        resolved.IsResolved.Should().BeTrue();
+        resolved.Status.Should().Be(ProviderResolutionStatus.Resolved);
+        resolved.Provider.Should().Be("provider-b");
+        resolved.Descriptor.Should().NotBeNull();
+        resolved.Descriptor!.Provider.Should().Be("provider-b");
+        resolved.MissingCapabilities.Should().BeEmpty();
     }
 
     [Fact]
-    public void No_match_is_explicit_and_does_not_use_null_selection_ambiguity()
+    public void Unknown_provider_is_rejected_without_a_descriptor()
+    {
+        var registry = new InMemoryProviderRegistry();
+        registry.Register(Provider("provider-a", [Capability("agent.execute", 1)]));
+
+        var result = registry.Resolve("provider-unknown", [new CapabilityRequirement("agent.execute", 1)]);
+
+        result.IsResolved.Should().BeFalse();
+        result.Status.Should().Be(ProviderResolutionStatus.UnknownProvider);
+        result.Provider.Should().Be("provider-unknown");
+        result.Descriptor.Should().BeNull();
+    }
+
+    [Fact]
+    public void Disabled_provider_is_rejected_with_its_descriptor()
     {
         var registry = new InMemoryProviderRegistry();
         registry.Register(Provider("provider-a", [Capability("agent.execute", 1)], enabled: false));
-        var request = new ProviderSelectionRequest([new CapabilityRequirement("agent.execute", 2)]);
 
-        var result = registry.Select(request);
+        var result = registry.Resolve("provider-a", [new CapabilityRequirement("agent.execute", 1)]);
 
-        result.IsMatch.Should().BeFalse();
-        result.Status.Should().Be(ProviderSelectionStatus.NoCompatibleProvider);
-        result.Match.Should().BeNull();
-        registry.Match(request).Should().BeEmpty();
+        result.IsResolved.Should().BeFalse();
+        result.Status.Should().Be(ProviderResolutionStatus.DisabledProvider);
+        result.Descriptor.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Incompatible_provider_lists_the_missing_capabilities()
+    {
+        var registry = new InMemoryProviderRegistry();
+        registry.Register(Provider("provider-a", [Capability("agent.execute", 1)]));
+
+        var result = registry.Resolve("provider-a", [new CapabilityRequirement("agent.execute", 2)]);
+
+        result.IsResolved.Should().BeFalse();
+        result.Status.Should().Be(ProviderResolutionStatus.IncompatibleProvider);
+        result.Descriptor.Should().NotBeNull();
+        result.MissingCapabilities.Should().Equal("agent.execute");
+    }
+
+    [Fact]
+    public void Resolution_without_requirements_checks_registration_and_availability_only()
+    {
+        var registry = new InMemoryProviderRegistry();
+        registry.Register(Provider("provider-a", [Capability("agent.execute", 1)]));
+
+        var resolved = registry.Resolve("provider-a");
+
+        resolved.IsResolved.Should().BeTrue();
+        resolved.Status.Should().Be(ProviderResolutionStatus.Resolved);
     }
 
     [Fact]
@@ -165,28 +203,39 @@ public sealed class ProviderRegistryTests
     }
 
     [Fact]
-    public void Selection_result_factories_enforce_their_state_invariants()
+    public void Resolution_result_factories_enforce_their_state_invariants()
     {
         var provider = Provider("provider-a", [Capability("agent.execute", 1)]);
-        var match = ProviderSelection.Match(
-            new ProviderSelectionRequest([new CapabilityRequirement("agent.execute", 1)]),
-            [provider]).Single();
 
-        var matched = ProviderSelectionResult.Matched(match);
-        matched.IsMatch.Should().BeTrue();
-        matched.Match.Should().BeSameAs(match);
-        ProviderSelectionResult.NoCompatibleProvider().IsMatch.Should().BeFalse();
-        var nullMatch = () => ProviderSelectionResult.Matched(null!);
-        nullMatch.Should().Throw<ArgumentNullException>();
+        var resolved = ProviderResolutionResult.Resolved(provider);
+        resolved.IsResolved.Should().BeTrue();
+        resolved.Descriptor.Should().BeSameAs(provider);
+        resolved.MissingCapabilities.Should().BeEmpty();
+
+        var unknown = ProviderResolutionResult.UnknownProvider("provider-unknown");
+        unknown.IsResolved.Should().BeFalse();
+        unknown.Status.Should().Be(ProviderResolutionStatus.UnknownProvider);
+        unknown.Descriptor.Should().BeNull();
+
+        var disabled = ProviderResolutionResult.DisabledProvider(provider);
+        disabled.Status.Should().Be(ProviderResolutionStatus.DisabledProvider);
+
+        var incompatible = ProviderResolutionResult.IncompatibleProvider(provider, ["agent.execute"]);
+        incompatible.Status.Should().Be(ProviderResolutionStatus.IncompatibleProvider);
+        incompatible.MissingCapabilities.Should().Equal("agent.execute");
+
+        var nullDescriptor = () => ProviderResolutionResult.Resolved(null!);
+        nullDescriptor.Should().Throw<ArgumentNullException>();
+        var emptyMissing = () => ProviderResolutionResult.IncompatibleProvider(provider, []);
+        emptyMissing.Should().Throw<ArgumentException>();
     }
 
     private static ProviderDescriptor Provider(
         string name,
         IReadOnlyList<CapabilityDescriptor> capabilities,
-        int priority = 0,
         bool enabled = true,
         IReadOnlyList<string>? models = null) =>
-        new(name, capabilities, priority, enabled, models);
+        new(name, capabilities, enabled, models);
 
     private static CapabilityDescriptor Capability(
         string name,

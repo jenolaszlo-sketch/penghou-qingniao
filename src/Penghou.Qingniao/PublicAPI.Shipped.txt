@@ -1,6 +1,4 @@
 #nullable enable
-const Penghou.Qingniao.DelegationRequestFingerprint.CurrentVersion = "v1" -> string!
-const Penghou.Qingniao.DelegationRequestFingerprint.PlanBoundVersion = "v2" -> string!
 const Penghou.Qingniao.SupervisorInterventionFingerprint.CurrentVersion = "v1" -> string!
 Penghou.Qingniao.DelegationAcceptance
 Penghou.Qingniao.DelegationAcceptance.DelegationAcceptance(Penghou.Qingniao.DelegationId DelegationId, Penghou.Qingniao.DelegationRequestFingerprint Fingerprint, bool IsNew) -> void

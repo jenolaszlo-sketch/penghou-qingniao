@@ -214,10 +214,10 @@ public sealed class M25CoordinatorTests
         var captures = new InMemoryExternalOperationHandleCaptureRegistry();
         return (new InMemoryDelegationCoordinator(
             new InMemoryDelegationAcceptanceRegistry(),
-            new InMemoryWorkflowPlanResolver(),
+            null,
             providers,
             adapters,
-            new SimingExternalOperationSemanticFingerprintVerifier(),
+            new LocalSemanticFingerprintVerifier(),
             captures,
             now: now ?? (() => Start),
             contextProvider: context,
@@ -227,6 +227,7 @@ public sealed class M25CoordinatorTests
     private static DelegationRequest Request(string key) => new(
         key,
         "Implement the objective",
+        "m25-provider",
         new WorkspaceReference("local", "workspace", "revision"),
         ["The result is correct"],
         [],

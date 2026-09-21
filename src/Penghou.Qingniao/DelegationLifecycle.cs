@@ -286,7 +286,7 @@ public static class DelegationLifecycle
         left.CheckpointId == right.CheckpointId
         && left.Session == right.Session
         && left.DelegationId == right.DelegationId
-        && left.PlanRevision == right.PlanRevision
+        && left.Fence == right.Fence
         && left.WorkflowRun == right.WorkflowRun
         && left.StructuralNode == right.StructuralNode
         && left.NodeGeneration == right.NodeGeneration

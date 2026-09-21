@@ -178,14 +178,14 @@ internal sealed class ProviderAdapterCatalogSnapshot
 /// <summary>
 /// Thread-safe, bounded catalog of host-authorized executable provider
 /// adapters. Registration is the authorization boundary: capability metadata
-/// and provider selection never add an executable adapter. Registrations are
-/// immutable; an equivalent descriptor replay succeeds only when it supplies
-/// the same adapter object, while replacement and descriptor conflicts fail.
-/// A coordinator must resolve the exact <see cref="ProviderMatch"/> selected
-/// from one captured <see cref="ProviderRegistrySnapshot"/>; callers must not
-/// construct a replacement match from capability claims. Replacing the
-/// catalog instance is the revocation mechanism for this in-memory proof;
-/// durable generation fencing is deferred to a later persistence boundary.
+/// never adds an executable adapter. Registrations are immutable; an
+/// equivalent descriptor replay succeeds only when it supplies the same
+/// adapter object, while replacement and descriptor conflicts fail. A
+/// coordinator resolves the caller-supplied provider identity and looks the
+/// adapter up by its exact registered descriptor; callers must not construct
+/// a replacement descriptor from capability claims. Replacing the catalog
+/// instance is the revocation mechanism for this in-memory proof; durable
+/// generation fencing is deferred to a later persistence boundary.
 /// </summary>
 internal sealed class InMemoryExternalOperationProviderCatalog
 {
@@ -275,17 +275,6 @@ internal sealed class InMemoryExternalOperationProviderCatalog
         {
             return LookupLocked(descriptor);
         }
-    }
-
-    /// <summary>
-    /// Looks up an adapter for a selected provider match. Only the match's
-    /// provider descriptor is used as identity; its selected capability list
-    /// cannot authorize or add an adapter.
-    /// </summary>
-    public ProviderAdapterLookupResult Lookup(ProviderMatch match)
-    {
-        ArgumentNullException.ThrowIfNull(match);
-        return Lookup(match.Provider);
     }
 
     /// <summary>Captures an immutable snapshot of registered adapter identities.</summary>

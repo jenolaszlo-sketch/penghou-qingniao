@@ -166,12 +166,12 @@ public sealed class M28OutcomeMatrixTests
         providers.Register(descriptor);
         var coordinator = new InMemoryDelegationCoordinator(
             new InMemoryDelegationAcceptanceRegistry(),
-            new InMemoryWorkflowPlanResolver(),
+            null,
             providers,
             new InMemoryExternalOperationProviderCatalog(),
-            new SimingExternalOperationSemanticFingerprintVerifier(),
+            new LocalSemanticFingerprintVerifier(),
             now: () => Start);
-        var accepted = await coordinator.AcceptAsync(Caller(), Request("missing-adapter"));
+        var accepted = await coordinator.AcceptAsync(Caller(), Request("missing-adapter", provider: "m28-missing"));
         var queued = await coordinator.GetAsync(accepted.DelegationId);
         var terminal = await coordinator.PumpAsync(accepted.DelegationId, queued.Progress.Revision);
 
@@ -219,18 +219,19 @@ public sealed class M28OutcomeMatrixTests
         catalog.Register(descriptor, provider);
         return (new InMemoryDelegationCoordinator(
             new InMemoryDelegationAcceptanceRegistry(),
-            new InMemoryWorkflowPlanResolver(),
+            null,
             registry,
             catalog,
-            new SimingExternalOperationSemanticFingerprintVerifier(),
+            new LocalSemanticFingerprintVerifier(),
             now: () => Start), provider);
     }
 
     private static DelegationCallerScope Caller() => new("m28-caller");
 
-    private static DelegationRequest Request(string key, int maximumWorkerCalls = 8, int maximumRetries = 1) => new(
+    private static DelegationRequest Request(string key, int maximumWorkerCalls = 8, int maximumRetries = 1, string provider = "m28-provider") => new(
         key,
         "Implement the objective",
+        provider,
         new WorkspaceReference("local", "workspace", "revision"),
         ["The result is correct"],
         [],

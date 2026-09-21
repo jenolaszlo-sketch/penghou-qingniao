@@ -20,6 +20,7 @@ public sealed class DelegationRequestValidatorTests
         var request = new DelegationRequest(
             " ",
             "Add deterministic cursor pagination.",
+            "test-provider",
             new WorkspaceReference("local-project", "sample-workspace", "abc123"),
             ["Pagination is deterministic."],
             ["Do not change unrelated APIs."],
@@ -40,20 +41,22 @@ public sealed class DelegationRequestValidatorTests
     }
 
     [Fact]
-    public void Validate_rejects_unimplemented_strategies()
+    public void Validate_accepts_a_fenced_request()
     {
         var request = new DelegationRequest(
             "change-42",
             "Add deterministic cursor pagination.",
+            "test-provider",
             new WorkspaceReference("local-project", "sample-workspace", "abc123"),
             ["Pagination is deterministic."],
             ["Do not change unrelated APIs."],
             new DelegationBudget(MaximumDuration: TimeSpan.FromMinutes(20)),
-            DelegationStrategy.Investigate);
+            admissionFence: new DelegationAdmissionFence("plan", "fence-1", "revision-1"));
 
         var act = () => DelegationRequestValidator.Validate(request);
 
-        act.Should().Throw<NotSupportedException>();
+        act.Should().NotThrow();
+        request.AdmissionFence.Should().NotBeNull();
     }
 
     [Fact]
@@ -81,6 +84,7 @@ public sealed class DelegationRequestValidatorTests
     private static DelegationRequest CreateRequest() => new(
         "change-42",
         "Add deterministic cursor pagination.",
+        "test-provider",
         new WorkspaceReference("local-project", "sample-workspace", "abc123"),
         ["Pagination is deterministic."],
         ["Do not change unrelated APIs."],
