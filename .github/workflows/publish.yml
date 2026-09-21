@@ -26,29 +26,52 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Pack
+      # A symbol package only validates against the nupkg built next to it.
+      # Re-pushing same-version symbols from a newer commit produces pairs
+      # NuGet cannot validate, so a fully-published version short-circuits
+      # the whole job. To repair symbols for an old version, rebuild its
+      # exact tag commit and push from there; otherwise ship a new version.
+      - name: Resolve version and check feed
+        id: release
         shell: bash
         run: |
           version=$(dotnet msbuild src/Penghou.Qingniao/Penghou.Qingniao.csproj -getProperty:Version -nologo)
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             version="${GITHUB_REF_NAME#v}"
           fi
+          version=$(echo "$version" | tr '[:upper:]' '[:lower:]')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          missing=0
+          for id in penghou.qingniao.abstractions penghou.qingniao; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://api.nuget.org/v3-flatcontainer/$id/$version/$id.nuspec")
+            echo "$id @ $version -> HTTP $code"
+            if [ "$code" != "200" ]; then missing=1; fi
+          done
+          echo "missing=$missing" >> "$GITHUB_OUTPUT"
+          if [ "$missing" = "0" ]; then echo "Version $version is already fully published; nothing to do."; fi
+
+      - name: Pack
+        if: steps.release.outputs.missing == '1'
+        shell: bash
+        run: |
           for csproj in \
             src/Penghou.Qingniao.Abstractions/Penghou.Qingniao.Abstractions.csproj \
             src/Penghou.Qingniao/Penghou.Qingniao.csproj; do
             dotnet pack "$csproj" \
               --configuration Release \
               --output ./artifacts \
-              --property:PackageVersion="$version"
+              --property:PackageVersion="${{ steps.release.outputs.version }}"
           done
 
       - name: NuGet login (OIDC -> temp API key)
+        if: steps.release.outputs.missing == '1'
         id: login
         uses: NuGet/login@v1
         with:
           user: ${{ secrets.NUGET_USER }}
 
       - name: Push packages to NuGet
+        if: steps.release.outputs.missing == '1'
         run: >
           dotnet nuget push ./artifacts/*.nupkg
           --source https://api.nuget.org/v3/index.json
@@ -56,6 +79,7 @@ jobs:
           --skip-duplicate
 
       - name: Push symbols to NuGet
+        if: steps.release.outputs.missing == '1'
         run: >
           dotnet nuget push ./artifacts/*.snupkg
           --source https://api.nuget.org/v3/index.json
