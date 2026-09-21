@@ -22,18 +22,26 @@ public enum CandidateVerificationVerdict
     RequestLocalReexecution = 3,
 }
 
-/// <summary>Immutable input to host candidate-verification policy.</summary>
+/// <summary>
+/// Immutable input to host candidate-verification policy, including the
+/// hard worker-call budget context so a policy can avoid requesting work
+/// the runtime would refuse.
+/// </summary>
 public sealed record CandidateVerificationInput(
     ValidationEvidence? Validation,
     ReviewEvidence? Review,
     Exception? ValidationFailure,
     Exception? ReviewFailure,
-    int Round)
+    int Round,
+    int WorkerCallsConsumed,
+    int MaximumWorkerCalls)
 {
     /// <summary>Validates this contract value and throws when an invariant is violated.</summary>
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(Round, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(WorkerCallsConsumed);
+        ArgumentOutOfRangeException.ThrowIfLessThan(MaximumWorkerCalls, 1);
     }
 }
 
@@ -101,9 +109,11 @@ public sealed record CandidateVerificationDecision
 
 /// <summary>
 /// Host candidate-verification policy. The policy interprets validation and
-/// review evidence (pass criteria, review standards, repair budgets) and the
+/// review evidence (pass criteria, review standards, round budgets) and the
 /// runtime executes the returned verdict. Product-specific evaluation policy
-/// lives in host implementations of this seam, never in Qingniao core.
+/// lives in host implementations of this seam, never in Qingniao core. The
+/// hard worker-call budget remains runtime-enforced: a requested re-execution
+/// that cannot fit is refused with a typed budget outcome.
 /// </summary>
 public interface ICandidateVerificationPolicy
 {
@@ -111,9 +121,9 @@ public interface ICandidateVerificationPolicy
     int MaxVerificationRounds { get; }
 
     /// <summary>
-    /// Decides one verification round outcome from its evidence. Called while
-    /// the delegation gate is held; implementations must return promptly and
-    /// must not pump the same delegation.
+    /// Decides one verification round outcome from its evidence and budget
+    /// context. Called while the delegation gate is held; implementations
+    /// must return promptly and must not pump the same delegation.
     /// </summary>
     CandidateVerificationDecision Decide(CandidateVerificationInput input);
 }

@@ -73,7 +73,7 @@ public sealed class M27CoordinatorTests
     }
 
     [Fact]
-    public async Task Correction_is_not_preflight_budget_refused()
+    public async Task Insufficient_repair_budget_is_a_typed_budget_outcome()
     {
         var corrector = new FixedCorrector();
         var (coordinator, _) = CreateCoordinator(new RevisionValidator(), new RevisionReviewer(), corrector);
@@ -82,10 +82,13 @@ public sealed class M27CoordinatorTests
 
         var terminal = await coordinator.PumpAsync(accepted.DelegationId, resultPhase.Progress.Revision);
 
-        terminal.Progress.State.Should().Be(DelegationState.Completed);
-        terminal.Result!.BudgetExceeded.Should().BeNull();
-        terminal.Result.Candidate!.Revision.Should().Be(2);
-        corrector.Calls.Should().Be(1);
+        terminal.Progress.State.Should().Be(DelegationState.BudgetExceeded);
+        terminal.Progress.WorkerCalls.Should().Be(5);
+        terminal.Result!.BudgetExceeded!.ActualConsumed.Value.Should().Be(5);
+        terminal.Result.BudgetExceeded.Consumed.Value.Should().Be(8);
+        terminal.Result.BudgetExceeded.RefusedCharge!.Amount.Value.Should().Be(3);
+        terminal.Result.Candidate!.Revision.Should().Be(1);
+        corrector.Calls.Should().Be(0);
     }
 
     [Fact]
@@ -121,16 +124,17 @@ public sealed class M27CoordinatorTests
     }
 
     [Fact]
-    public async Task Single_evaluator_failure_is_terminal_without_repair()
+    public async Task Single_evaluator_is_invoked_once_and_its_failure_is_terminal()
     {
         var validator = new RevisionValidator();
         var (coordinator, _) = CreateCoordinator(validator, null, null, policy: new LegacyMappingPolicy());
-        var accepted = await coordinator.AcceptAsync(new DelegationCallerScope("caller"), Request("single-evaluator", 3));
+        var accepted = await coordinator.AcceptAsync(new DelegationCallerScope("caller"), Request("single-evaluator", 4));
         var resultPhase = await RunToResultPhaseAsync(coordinator, accepted.DelegationId);
 
         var terminal = await coordinator.PumpAsync(accepted.DelegationId, resultPhase.Progress.Revision);
 
         terminal.Progress.State.Should().Be(DelegationState.Failed);
+        terminal.Progress.WorkerCalls.Should().Be(4);
         validator.Calls.Should().Be(1);
     }
 

@@ -78,6 +78,15 @@ internal sealed class InMemoryDelegationCoordinator
         this.candidateValidator = candidateValidator;
         this.candidateReviewer = candidateReviewer;
         this.candidateCorrector = candidateCorrector;
+        if (verificationPolicy is null && (candidateValidator is not null || candidateReviewer is not null))
+        {
+            // Fail fast: evaluators without a host decision policy can only
+            // ever reject, which is a confusing wiring bug, not a mode.
+            throw new ArgumentException(
+                "A verification policy is required when candidate evaluators are configured.",
+                nameof(verificationPolicy));
+        }
+
         this.verificationPolicy = verificationPolicy ?? FailClosedVerificationPolicy.Instance;
         if (this.verificationPolicy.MaxVerificationRounds < 1)
         {
@@ -1494,6 +1503,29 @@ internal sealed class InMemoryDelegationCoordinator
                 runtime.ValidationInvocationId = $"validation:{runtime.DelegationId.Value:D}:1";
                 runtime.ReviewInvocationId = $"review:{runtime.DelegationId.Value:D}:1";
                 runtime.ImplementationInvocation = CreateImplementationInvocation(runtime, publication.Candidate, result);
+
+                // The hard worker-call budget is a runtime contract: never
+                // launch evaluators the budget cannot pay for.
+                var consumedAtResult = DelegationExecutionPublisher.ActualWorkerCalls(runtime, current);
+                var verificationCalls = CandidateEvaluationRunner.VerificationCallCount(
+                    candidateValidator is not null,
+                    candidateReviewer is not null);
+                var projectedCalls = checked(consumedAtResult + verificationCalls);
+                if (projectedCalls > runtime.Request.Budget.MaximumWorkerCalls)
+                {
+                    runtime.Phase = CoordinatorPhase.Complete;
+                    return await publisher.PublishBudgetExceededAsync(
+                        runtime,
+                        current,
+                        result.Artifacts,
+                        "worker-calls",
+                        runtime.Request.Budget.MaximumWorkerCalls,
+                        consumedAtResult,
+                        projectedCalls - consumedAtResult,
+                        $"The worker-call budget cannot cover deterministic validation and independent review (required {projectedCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
+                        cancellationToken).ConfigureAwait(false);
+                }
+
                 runtime.Phase = CoordinatorPhase.Evaluate;
                 return current;
             }

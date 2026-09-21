@@ -180,7 +180,7 @@ public sealed class M26CoordinatorTests
     }
 
     [Fact]
-    public async Task Evaluation_proceeds_without_repair_budget_preflight()
+    public async Task Insufficient_evaluator_budget_is_a_typed_budget_outcome()
     {
         var validator = new FixedValidator("passed");
         var reviewer = new FixedReviewer("approved");
@@ -189,9 +189,47 @@ public sealed class M26CoordinatorTests
         var observed = await RunToResultPhaseAsync(coordinator, accepted.DelegationId);
         var terminal = await coordinator.PumpAsync(accepted.DelegationId, observed.Progress.Revision);
 
-        terminal.Progress.State.Should().Be(DelegationState.Completed);
-        validator.Calls.Should().Be(1);
-        reviewer.Calls.Should().Be(1);
+        terminal.Progress.State.Should().Be(DelegationState.BudgetExceeded);
+        terminal.Progress.WorkerCalls.Should().Be(3);
+        terminal.Result!.BudgetExceeded.Should().NotBeNull();
+        terminal.Result.BudgetExceeded!.ActualConsumed.Value.Should().Be(3);
+        terminal.Result.BudgetExceeded.Consumed.Value.Should().Be(5);
+        terminal.Result.BudgetExceeded.Charge.Amount.Value.Should().Be(2);
+        validator.Calls.Should().Be(0);
+        reviewer.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Verification_policy_receives_worker_call_budget_context()
+    {
+        var policy = new StubVerificationPolicy(_ => CandidateVerificationDecision.Accept());
+        var (coordinator, _) = CreateCoordinator(new FixedValidator("passed"), new FixedReviewer("approved"), policy: policy);
+        var accepted = await coordinator.AcceptAsync(new DelegationCallerScope("caller"), Request("budget-context"));
+        var observed = await RunToResultPhaseAsync(coordinator, accepted.DelegationId);
+        await coordinator.PumpAsync(accepted.DelegationId, observed.Progress.Revision);
+
+        policy.Seen.Should().ContainSingle();
+        policy.Seen[0].Round.Should().Be(1);
+        policy.Seen[0].MaximumWorkerCalls.Should().Be(8);
+        policy.Seen[0].WorkerCallsConsumed.Should().Be(5);
+    }
+
+    [Fact]
+    public void Evaluators_without_a_verification_policy_fail_fast()
+    {
+        var descriptor = new ProviderDescriptor("m26-provider", [new CapabilityDescriptor("agent.execute", 1)]);
+        var providers = new InMemoryProviderRegistry();
+        providers.Register(descriptor);
+
+        var act = () => new InMemoryDelegationCoordinator(
+            new InMemoryDelegationAcceptanceRegistry(),
+            null,
+            providers,
+            new InMemoryExternalOperationProviderCatalog(),
+            now: () => Start,
+            candidateValidator: new FixedValidator("passed"));
+
+        act.Should().Throw<ArgumentException>();
     }
 
     private static async Task<DelegationExecutionSnapshot> RunToResultPhaseAsync(

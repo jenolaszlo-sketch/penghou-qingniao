@@ -4,8 +4,8 @@ namespace Penghou.Qingniao;
 /// Candidate verification for one delegation: evaluates validation and
 /// review evidence, executes host verification policy verdicts, performs
 /// bounded checkpoint-local re-execution, and publishes terminal outcomes.
-/// Pure verification mechanics; pass criteria, review standards, and repair
-/// budgets live in the host <see cref="ICandidateVerificationPolicy"/>.
+/// Round budgets live in the host <see cref="ICandidateVerificationPolicy"/>;
+/// the hard worker-call budget is enforced by the runtime.
 /// </summary>
 internal sealed class CandidateEvaluationRunner
 {
@@ -128,7 +128,7 @@ internal sealed class CandidateEvaluationRunner
 
                 if (runtime.CancellationKey is not null && round == 1)
                 {
-                    var cancellationDecision = DecideRound(outcome, runtime, round);
+                    var cancellationDecision = DecideRound(outcome, runtime, latest, round);
                     if (cancellationDecision.Verdict == CandidateVerificationVerdict.RequestLocalReexecution)
                     {
                         // Cancellation is already pending; starting another
@@ -243,7 +243,7 @@ internal sealed class CandidateEvaluationRunner
         RecordEvaluationEvidence(runtime, outcome);
         runtime.AggregateEvidence = new EvidenceBundle(runtime.Invocations, runtime.Validations, runtime.Reviews);
 
-        var decision = DecideRound(outcome, runtime, round);
+        var decision = DecideRound(outcome, runtime, current, round);
 
         switch (decision.Verdict)
         {
@@ -282,6 +282,29 @@ internal sealed class CandidateEvaluationRunner
                 CancellationToken.None).ConfigureAwait(false);
         }
 
+        // The round budget is host policy, but the worker-call budget is a
+        // hard runtime contract: never start a correction the budget cannot
+        // pay for. The policy received this budget context and could have
+        // chosen a different verdict; a request that cannot fit is refused
+        // as a typed budget outcome instead of silently overrunning.
+        var consumed = DelegationExecutionPublisher.ActualWorkerCalls(runtime, current);
+        var verificationCalls = VerificationCallCount(candidateValidator is not null, candidateReviewer is not null);
+        var projectedCalls = checked(consumed + 1 + verificationCalls);
+        if (projectedCalls > runtime.Request.Budget.MaximumWorkerCalls)
+        {
+            runtime.Phase = InMemoryDelegationCoordinator.CoordinatorPhase.Complete;
+            return await publisher.PublishBudgetExceededAsync(
+                runtime,
+                current,
+                runtime.ResultArtifacts ?? [],
+                "worker-calls",
+                runtime.Request.Budget.MaximumWorkerCalls,
+                consumed,
+                projectedCalls - consumed,
+                $"The worker-call budget cannot cover a checkpoint-local re-execution followed by verification (required {projectedCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
+                CancellationToken.None).ConfigureAwait(false);
+        }
+
         runtime.CorrectionStarted = true;
         runtime.CorrectionCancellation ??= new CancellationTokenSource();
         runtime.CorrectionTask ??= CorrectCandidateAsync(runtime, outcome, round, runtime.CorrectionCancellation.Token);
@@ -291,6 +314,7 @@ internal sealed class CandidateEvaluationRunner
     private CandidateVerificationDecision DecideRound(
         CandidateEvaluationOutcome outcome,
         InMemoryDelegationCoordinator.RuntimeState runtime,
+        DelegationExecutionSnapshot current,
         int round)
     {
         var input = new CandidateVerificationInput(
@@ -298,11 +322,16 @@ internal sealed class CandidateEvaluationRunner
             outcome.Review,
             runtime.ValidationFailure,
             runtime.ReviewFailure,
-            round);
+            round,
+            DelegationExecutionPublisher.ActualWorkerCalls(runtime, current),
+            runtime.Request.Budget.MaximumWorkerCalls);
         input.Validate();
         return verificationPolicy.Decide(input)
             ?? throw new InvalidOperationException("The verification policy returned no decision.");
     }
+
+    internal static int VerificationCallCount(bool hasValidator, bool hasReviewer) =>
+        (hasValidator ? 1 : 0) + (hasReviewer ? 1 : 0);
 
     private void RecordEvaluationEvidence(
         InMemoryDelegationCoordinator.RuntimeState runtime,

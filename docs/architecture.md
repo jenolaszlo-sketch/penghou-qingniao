@@ -152,8 +152,11 @@ Execute agent -> Candidate revision N
 Validation and review evidence may be evaluated concurrently against the same
 sealed candidate revision. A re-execution creates a new revision; it never
 mutates evidence that was already reviewed. Pass criteria, review standards,
-and repair budgets are host verification policy (`ICandidateVerificationPolicy`);
+and round budgets are host verification policy (`ICandidateVerificationPolicy`);
 Qingniao executes the returned verdict and never interprets evidence content.
+The hard worker-call budget stays runtime-enforced: Qingniao refuses
+evaluation or re-execution that the budget cannot cover and returns a typed
+budget outcome, so a host policy's round budget can never silently overrun it.
 
 The former built-in `Implement` preset graph now lives in Marang, its sole
 owner. Qingniao coordinates who acts, what context and budget are allowed,

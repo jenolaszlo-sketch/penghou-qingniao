@@ -112,4 +112,8 @@ Penghou.Qingniao.CandidateVerificationInput.Review.init -> void
 Penghou.Qingniao.CandidateVerificationInput.ValidationFailure.init -> void
 Penghou.Qingniao.CandidateVerificationInput.ReviewFailure.init -> void
 Penghou.Qingniao.CandidateVerificationInput.Round.init -> void
-Penghou.Qingniao.CandidateVerificationInput.CandidateVerificationInput(Penghou.Qingniao.ValidationEvidence? Validation, Penghou.Qingniao.ReviewEvidence? Review, System.Exception? ValidationFailure, System.Exception? ReviewFailure, int Round) -> void
+Penghou.Qingniao.CandidateVerificationInput.CandidateVerificationInput(Penghou.Qingniao.ValidationEvidence? Validation, Penghou.Qingniao.ReviewEvidence? Review, System.Exception? ValidationFailure, System.Exception? ReviewFailure, int Round, int WorkerCallsConsumed, int MaximumWorkerCalls) -> void
+Penghou.Qingniao.CandidateVerificationInput.WorkerCallsConsumed.get -> int
+Penghou.Qingniao.CandidateVerificationInput.WorkerCallsConsumed.init -> void
+Penghou.Qingniao.CandidateVerificationInput.MaximumWorkerCalls.get -> int
+Penghou.Qingniao.CandidateVerificationInput.MaximumWorkerCalls.init -> void
