@@ -36,8 +36,9 @@ Qingniao recognizes three semantic categories:
 
 These categories describe trust and evidence semantics. They should not become
 a closed routing enum that prevents a provider from offering multiple
-capabilities. Workflow policy requests capabilities such as `implement-code`,
-`review-code`, or `run-tests`; host configuration selects an eligible provider.
+capabilities. The caller requests capabilities such as `implement-code`,
+`review-code`, or `run-tests` alongside its chosen provider; Qingniao verifies
+the chosen provider satisfies them and never selects between providers.
 
 Deterministic evidence wins over conflicting model claims. A successful agent
 message is never proof that tests passed.
@@ -106,21 +107,24 @@ available, or appropriate for automation. Never expose Codex authentication to
 repository-controlled processes, and do not pass credentials into test/build
 environments.
 
-## Capability routing
+## Capability verification
 
-Routing uses semantic requirements plus policy:
+The caller supplies the provider identity; Qingniao resolves that exact
+provider and verifies registration, availability, and required capabilities
+(such as `implement-code`, `review-code`, or `run-tests`). Qingniao never
+ranks providers or chooses between them — selection intelligence, if any,
+lives above Qingniao in host configuration or a future selection layer:
 
 ```text
-implement-code       -> economical Codex agent provider
-review-code          -> independent Baize model or read-only agent provider
-run-tests            -> deterministic host executor
-architectural-choice -> supervisor
+caller-supplied provider + required capabilities
+    -> registry resolution (registered? enabled? compatible?)
+    -> executable adapter lookup (host-authorized?)
+    -> typed rejection otherwise
 ```
 
-Provider selection records capability, provider, concrete profile/model,
-policy version, and budget hints. A provider may internally choose subordinate
-models; Qingniao only requires deeper visibility when needed for cancellation,
-cost, policy, or audit.
+Provider resolution records provider, capabilities, and budget hints. A
+provider may internally choose subordinate models; Qingniao only requires
+deeper visibility when needed for cancellation, cost, policy, or audit.
 
 ## Two budget layers
 
@@ -140,22 +144,28 @@ the Marang MCP endpoint or credentials needed to start another Qingniao
 delegation. Any future recursion requires an explicit depth, ancestry, and
 budget contract.
 
-## Simple Implement preset/provider flow
+## Delegated execution flow (Marang owns the preset)
 
-This is the bootstrap provider flow for `marang_delegate`, not the complete
-supervisory vertical slice. The durable waiting and intervention sequence is
-defined in [product direction](product-direction.md).
+The fixed Implement preset graph now lives in Marang. The generic Qingniao
+flow for `marang_delegate` is: accept through host admission policy, resolve
+the caller-supplied provider, execute, verify the candidate through host
+verification policy, and return a typed result. The durable waiting and
+intervention sequence is defined in [product direction](product-direction.md).
 
 ```text
 Accept -> Execute agent -> seal candidate revision
                              |                 |
                              v                 v
-                    deterministic tests   independent review
+                  deterministic       independent
+                   validation            review
                              +--------v--------+
-                                   Evaluate
-                              pass | correct once
-                                   v
-                                  Result
+                              host policy decides:
+                         accept | reject | continue
+                                | with constraint |
+                                v                 v
+                              Result      checkpoint-local
+                                          re-execution
+                                          (policy-bounded)
 ```
 
 Inspection and planning may occur inside the agent operation and may be

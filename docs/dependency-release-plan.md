@@ -11,7 +11,6 @@ from the Marang service product.
 Published Penghou primitives
   Zhinu preview.12
   Hongxian preview.2
-  Siming preview.4
           |
           v
 Penghou.Qingniao.Abstractions

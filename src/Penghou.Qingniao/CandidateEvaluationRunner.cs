@@ -128,11 +128,21 @@ internal sealed class CandidateEvaluationRunner
 
                 if (runtime.CancellationKey is not null && round == 1)
                 {
+                    var cancellationDecision = DecideRound(outcome, runtime, round);
+                    if (cancellationDecision.Verdict == CandidateVerificationVerdict.RequestLocalReexecution)
+                    {
+                        // Cancellation is already pending; starting another
+                        // correction round would outlive its supervision.
+                        cancellationDecision = CandidateVerificationDecision.ContinueWithConstraint(
+                            "Local re-execution was superseded by cancellation.",
+                            cancellationDecision.Note);
+                    }
+
                     return await PublishEvaluationTerminalAsync(
                             runtime,
                             latest,
                             outcome,
-                            DecideRound(outcome, runtime, round),
+                            cancellationDecision,
                             CancellationToken.None)
                         .ConfigureAwait(false);
                 }
@@ -238,11 +248,7 @@ internal sealed class CandidateEvaluationRunner
         switch (decision.Verdict)
         {
             case CandidateVerificationVerdict.Accept:
-                return await PublishEvaluationTerminalAsync(runtime, current, outcome, decision, CancellationToken.None)
-                    .ConfigureAwait(false);
             case CandidateVerificationVerdict.Reject:
-                return await PublishEvaluationTerminalAsync(runtime, current, outcome, decision, CancellationToken.None)
-                    .ConfigureAwait(false);
             case CandidateVerificationVerdict.ContinueWithConstraint:
                 return await PublishEvaluationTerminalAsync(runtime, current, outcome, decision, CancellationToken.None)
                     .ConfigureAwait(false);

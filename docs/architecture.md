@@ -8,17 +8,17 @@ document describes current ownership.
 ## Product boundary
 
 Qingniao is the runtime around one bounded, artifact-producing delegation. It
-accepts a normalized delegation request, selects an authorized execution
-capability, tracks progress, reconnects to externally accepted work, supports
-bounded supervision and semantic re-execution, and returns immutable evidence.
-It is not a model SDK, session ledger, workflow compiler, application service,
-or general workflow runtime.
+accepts a normalized delegation request, admits it through host policy,
+resolves the caller-supplied provider identity, tracks progress, reconnects
+to externally accepted work, supports bounded supervision and semantic
+re-execution, and returns immutable evidence. It is not a model SDK, session
+ledger, workflow compiler, application service, or general workflow runtime.
 
 ```text
 Marang or another host
     |
     v
-Qingniao: delegation identity, provider selection, supervision, evidence
+Qingniao: delegation identity, provider resolution, supervision, evidence
     |
     +--> A2A provider: interoperable external agent task
     +--> process provider: bounded local/headless agent
@@ -32,9 +32,11 @@ Dependencies point inward: neither package exposes MCP, MVC, Zhinu, Baize, or
 a filesystem path. A host may invoke Qingniao from a Zhinu activity and adapt
 its evidence into Hongxian, but those integrations remain outside the core.
 
-Hongxian is the session and correlation authority for the real durable
-supervisory slice, although pure core/in-memory tests and simple preset policy
-evaluation may run with fakes. Hongxian is not an executor or sandbox.
+A host may record sessions and correlation in Hongxian for the real durable
+supervisory slice, although pure core/in-memory tests and simple policy
+evaluation may run with fakes. Hongxian is not an executor or sandbox, and
+Qingniao never requires it: the supervision session is an opaque
+host-supplied identity.
 
 MCP is the primary agent-facing northbound protocol. A2A is the preferred
 southbound protocol when an external agent supports it. Both remain adapters;
@@ -60,9 +62,9 @@ This contract is distinct from Zhinu step idempotency.
 The identity hierarchy is:
 
 ```text
-Hongxian Session
+Supervision Session
   -> Qingniao SupervisedWork / Delegation
-    -> Fuwen PlanRevision
+    -> AdmissionFence (opaque host binding)
       -> Zhinu WorkflowRun / ExecutionEpoch
         -> structural Node
           -> NodeGeneration
@@ -70,8 +72,9 @@ Hongxian Session
               -> immutable artifacts
 ```
 
-The Hongxian session is the temporal/correlation authority; Zhinu remains the
-execution truth. The supervised-work identity is stable and user-visible. A
+The supervision session is a host-supplied correlation identity; Zhinu
+remains the execution truth. The supervised-work identity is stable and
+user-visible. A
 retry/reconnect stays in the same `NodeGeneration` and may create a new
 provider attempt only where policy permits, using the same semantic input.
 Semantic node re-execution creates a new `NodeGeneration`. Reopening completed
@@ -79,10 +82,11 @@ supervised work creates a new linked Zhinu `WorkflowRun`/`ExecutionEpoch`; it
 never mutates terminal results. Interventions are idempotent and
 revision-fenced so stale actions cannot overwrite newer decisions.
 
-When a workflow is selected or authored, its canonical plan fingerprint and
-immutable Fuwen `PlanRevision` are part of supervised-work acceptance. Changing
-workflow semantics therefore creates a new plan revision rather than silently
-reinterpreting an accepted request key.
+An admitted delegation may carry an opaque external fence (for example a host
+workflow-plan reference). Host admission policy verifies the fence; Qingniao
+never interprets what it represents. Changing the fenced external semantics
+therefore creates a new fence binding rather than silently reinterpreting an
+accepted request key.
 
 ## Lifecycle
 
@@ -119,39 +123,42 @@ Qingniao treats those mechanics as opaque execution-provider behavior. Qingniao
 still determines when the activity runs, its input and budget, required
 evidence, dependencies, acceptance, retry, escalation, and durable lifecycle.
 
-Providers are selected by semantic capability rather than vendor or model name.
-An external execution has its own durable handle. Zhinu replay re-observes or
+Providers are resolved by caller-supplied identity, never chosen by Qingniao.
+Registration, availability, and required capabilities are verified; anything
+else is rejected with a typed outcome. An external execution has its own
+durable handle. Zhinu replay re-observes or
 resumes that handle instead of launching duplicate work after an ambiguous
 failure. See [agent execution](agent-execution.md).
 
-## Current Implement preset
+## Delegated execution and host verification policy
 
 ```text
 Execute agent -> Candidate revision N
                    |             |
                    v             v
-                 Test          Review
+              deterministic  independent
+               validation      review
                    +------v------+
-                        Evaluate
-                     success | problems
-                             v
-                  Correct -> revision N+1
-                              |       |
-                             Test   Review
+                    host policy decides:
+              accept | reject | continue
+                     | with constraint |
+                     v                 v
+                  Result      checkpoint-local
+                              re-execution
+                              (policy-bounded)
+                              -> revision N+1
 ```
 
-`Test` and `Review` may run concurrently only against the same sealed candidate
-revision. A fix creates a new revision; it never mutates evidence that was
-already reviewed. The evaluator consumes structured reports plus deterministic
-test outcomes. A model may explain test output but cannot change whether a
-command succeeded.
+Validation and review evidence may be evaluated concurrently against the same
+sealed candidate revision. A re-execution creates a new revision; it never
+mutates evidence that was already reviewed. Pass criteria, review standards,
+and repair budgets are host verification policy (`ICandidateVerificationPolicy`);
+Qingniao executes the returned verdict and never interprets evidence content.
 
-Qingniao retains the built-in `Implement` policy; Marang maps its simple
-`marang_delegate` operation to that policy. Advanced hosts may select a
-validated artifact-driven Fuwen workflow. Qingniao coordinates who
-acts, what context and budget are allowed, when the supervisor should be
-notified, and how outcomes are accepted; Fuwen owns workflow semantics and
-Zhinu owns durable execution.
+The former built-in `Implement` preset graph now lives in Marang, its sole
+owner. Qingniao coordinates who acts, what context and budget are allowed,
+when the supervisor should be notified, and how outcomes are accepted; the
+host owns workflow semantics and Zhinu owns durable execution.
 
 ## Supervision and context
 
@@ -160,7 +167,7 @@ authorize work, change state, extend a budget, or replace a result. Durable
 state and revision checks remain authoritative.
 
 Each planned pause is addressed by a stable `SupervisorCheckpointId` scoped to
-the session, supervised work, workflow run/epoch, plan revision, structural
+the session, supervised work, workflow run/epoch, admission fence, structural
 node, and checkpoint address. A top-level wait gates only progress that depends
 on its decision; other eligible independent branches may continue. An
 intervention targets the checkpoint ID, expected current revision, and a
@@ -213,11 +220,11 @@ redaction policy.
 
 ## Profiles and provenance
 
-Requests select a semantic profile such as `fast`, `coding`, or `review`, not a
-provider model ID. Host configuration resolves profiles to Baize models. Every
-worker receipt records the resolved provider/model, invocation identity, usage,
-profile, tool capabilities, and input artifact identities so routing remains
-auditable.
+Requests carry an opaque provider identity plus required capabilities; hosts
+resolve profiles to concrete providers outside Qingniao. Every worker receipt
+records the resolved provider/model, invocation identity, usage, profile, tool
+capabilities, and input artifact identities so the delegation remains auditable
+without Qingniao choosing between providers.
 
 Review independence is evidence, not a boolean promise. The result should state
 whether implementation and review used a different invocation, context,

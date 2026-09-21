@@ -38,7 +38,7 @@ public sealed record DelegationAdmissionDecision
         }
 
         Status = status;
-        Reason = reason;
+        Reason = reason is null ? null : RequireReason(reason, nameof(reason));
     }
 
     /// <summary>Gets the admission status.</summary>
@@ -63,6 +63,20 @@ public sealed record DelegationAdmissionDecision
         }
 
         return new DelegationAdmissionDecision(status, reason);
+    }
+
+    private static string RequireReason(string value, string parameterName)
+    {
+        var normalized = value.Normalize(System.Text.NormalizationForm.FormC)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Trim();
+        if (normalized.Length == 0 || normalized.Length > 2_048)
+        {
+            throw new ArgumentException("An admission reason must be non-empty and bounded.", parameterName);
+        }
+
+        return normalized;
     }
 }
 

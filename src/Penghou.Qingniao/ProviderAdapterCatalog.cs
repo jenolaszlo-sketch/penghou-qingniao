@@ -264,7 +264,7 @@ internal sealed class InMemoryExternalOperationProviderCatalog
     }
 
     /// <summary>
-    /// Looks up an adapter for a selected provider descriptor. The descriptor
+    /// Looks up an adapter for a caller-supplied provider descriptor. The descriptor
     /// must match the host-registered descriptor exactly, apart from the
     /// immutable ordering tolerated by descriptor semantics.
     /// </summary>

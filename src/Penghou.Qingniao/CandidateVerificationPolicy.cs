@@ -10,8 +10,8 @@ public enum CandidateVerificationVerdict
     Reject = 1,
 
     /// <summary>
-    /// Supervision continues with an additional host constraint; the outcome
-    /// is terminal and requires supervision.
+    /// Supervision ends terminally requiring supervision, recording an
+    /// additional host constraint for the supervisor to answer.
     /// </summary>
     ContinueWithConstraint = 2,
 
@@ -56,6 +56,11 @@ public sealed record CandidateVerificationDecision
             throw new ArgumentException(
                 "A continue-with-constraint decision requires a constraint and no other verdict may carry one.",
                 nameof(constraint));
+        }
+
+        if (constraint is not null && constraint.Length > 4_096)
+        {
+            throw new ArgumentException("A decision constraint cannot exceed 4,096 characters.", nameof(constraint));
         }
 
         if (note is not null && (string.IsNullOrWhiteSpace(note) || note.Length > 1_024))
@@ -105,7 +110,11 @@ public interface ICandidateVerificationPolicy
     /// <summary>Gets the maximum verification rounds, including re-executions. Must be at least one.</summary>
     int MaxVerificationRounds { get; }
 
-    /// <summary>Decides one verification round outcome from its evidence.</summary>
+    /// <summary>
+    /// Decides one verification round outcome from its evidence. Called while
+    /// the delegation gate is held; implementations must return promptly and
+    /// must not pump the same delegation.
+    /// </summary>
     CandidateVerificationDecision Decide(CandidateVerificationInput input);
 }
 

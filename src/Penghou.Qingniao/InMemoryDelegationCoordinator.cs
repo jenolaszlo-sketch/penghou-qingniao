@@ -2127,7 +2127,6 @@ internal sealed class InMemoryDelegationCoordinator
         {
             DelegationId = delegationId;
             Request = request;
-            Provider = provider;
             Adapter = adapter;
             ProviderFailure = providerFailure;
             AcceptedAt = acceptedAt == default
@@ -2181,7 +2180,6 @@ internal sealed class InMemoryDelegationCoordinator
 
         internal DelegationId DelegationId { get; }
         internal DelegationRequest Request { get; }
-        internal ProviderDescriptor? Provider { get; }
         internal IExternalOperationProvider? Adapter { get; }
         internal string? ProviderFailure { get; }
         internal DateTimeOffset AcceptedAt { get; }

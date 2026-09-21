@@ -1,6 +1,6 @@
 namespace Penghou.Qingniao;
 
-/// <summary>Stable identity of the external agent selected for one operation.</summary>
+/// <summary>Stable identity of the external agent resolved for one operation.</summary>
 public sealed record ExternalAgentReference
 {
     /// <summary>
