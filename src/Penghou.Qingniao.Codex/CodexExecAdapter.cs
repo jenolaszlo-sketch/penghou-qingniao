@@ -43,7 +43,18 @@ public sealed class CodexExecAdapter : IExternalOperationProvider
         ArgumentNullException.ThrowIfNull(handleSink);
         var invocation = BuildInvocation(resumeThreadId: null);
         LastInvocation = invocation;
-        var process = processes.Start(invocation);
+        ICodexProcess process;
+        try
+        {
+            process = processes.Start(invocation);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw new ExternalOperationProviderException(new ExternalOperationFailure(
+                ExternalOperationFailureKind.Transport, "codex.spawn-failed",
+                $"Codex process could not start: {exception.GetType().Name}.", retryable: false));
+        }
+
         var tracked = new TrackedOperation(process, options.MaxOutputBytes);
         tracked.Pump = PumpAsync(tracked);
         try
@@ -52,6 +63,7 @@ public sealed class CodexExecAdapter : IExternalOperationProvider
             var handle = BuildHandle(request, threadId);
             tracked.Handle = handle;
             operations[threadId] = tracked;
+            EvictCompleted();
             await handleSink.CaptureAsync(new ExternalOperationHandleCapture(handle, now()), cancellationToken)
                 .ConfigureAwait(false);
             var state = tracked.Failure is null ? ExternalOperationState.Running : ExternalOperationState.Failed;
@@ -155,11 +167,23 @@ public sealed class CodexExecAdapter : IExternalOperationProvider
         {
             var invocation = BuildInvocation(resumeThreadId: threadId);
             LastInvocation = invocation;
-            var process = processes.Start(invocation);
+            ICodexProcess process;
+            try
+            {
+                process = processes.Start(invocation);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                throw new ExternalOperationProviderException(new ExternalOperationFailure(
+                    ExternalOperationFailureKind.Transport, "codex.spawn-failed",
+                    $"Codex process could not start: {exception.GetType().Name}.", retryable: false));
+            }
+
             var tracked = new TrackedOperation(process, options.MaxOutputBytes) { ThreadId = threadId };
             tracked.ThreadFound.TrySetResult(threadId);
             operations[threadId] = tracked;
             tracked.Pump = PumpAsync(tracked);
+            EvictCompleted();
         }
 
         await handleSink.CaptureAsync(
@@ -334,6 +358,28 @@ public sealed class CodexExecAdapter : IExternalOperationProvider
         }
 
         return tracked;
+    }
+
+    private void EvictCompleted()
+    {
+        const int capacity = 128;
+        if (operations.Count <= capacity)
+        {
+            return;
+        }
+
+        foreach (var key in operations.Keys)
+        {
+            if (operations.Count <= capacity)
+            {
+                break;
+            }
+
+            if (operations.TryGetValue(key, out var tracked) && tracked.Completed)
+            {
+                operations.TryRemove(key, out _);
+            }
+        }
     }
 
     private sealed class TrackedOperation

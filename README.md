@@ -43,6 +43,7 @@ Both packages target .NET 8 and .NET 10.
 | --- | --- |
 | `Penghou.Qingniao.Abstractions` | Stable identities, requests, lifecycle, budgets, capabilities, supervision, artifacts, evidence, and provider contracts |
 | `Penghou.Qingniao` | Validation, canonical semantic identity, provider resolution, in-memory execution proof, lifecycle policy, and supervision behavior |
+| `Penghou.Qingniao.Codex` | Process-isolated Codex CLI execution adapter (not yet published; live execution proof pending) |
 
 The abstractions intentionally contain no MVC, HTTP, MCP, authentication,
 tenant, filesystem, Fuwen, Zhinu, Baize, or Marang types. Hosts adapt those

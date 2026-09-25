@@ -164,6 +164,21 @@ public sealed class CodexExecAdapterTests
     }
 
     [Fact]
+    public async Task StartAsync_spawn_failure_is_classified_transport()
+    {
+        var factory = new ScriptedProcessFactory((_, _) => throw new InvalidOperationException("no cli"));
+        var adapter = CreateAdapter(factory);
+        var sink = new RecordingHandleSink();
+        var ct = TestContext.Current.CancellationToken;
+
+        var act = () => adapter.StartAsync(StartRequest(), sink, ct).AsTask();
+        var failure = (await act.Should().ThrowAsync<ExternalOperationProviderException>()).Which.Failure;
+        failure.Code.Should().Be("codex.spawn-failed");
+        failure.Kind.Should().Be(ExternalOperationFailureKind.Transport);
+        sink.Captures.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Options_reject_workspace_outside_approved_root()
     {
         var factory = new ScriptedProcessFactory((_, _) => new ScriptedProcess([], exitCode: 0));
