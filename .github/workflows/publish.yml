@@ -42,7 +42,7 @@ jobs:
           version=$(echo "$version" | tr '[:upper:]' '[:lower:]')
           echo "version=$version" >> "$GITHUB_OUTPUT"
           missing=0
-          for id in penghou.qingniao.abstractions penghou.qingniao; do
+          for id in penghou.qingniao.abstractions penghou.qingniao penghou.qingniao.codex; do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://api.nuget.org/v3-flatcontainer/$id/$version/$id.nuspec")
             echo "$id @ $version -> HTTP $code"
             if [ "$code" != "200" ]; then missing=1; fi
@@ -56,7 +56,8 @@ jobs:
         run: |
           for csproj in \
             src/Penghou.Qingniao.Abstractions/Penghou.Qingniao.Abstractions.csproj \
-            src/Penghou.Qingniao/Penghou.Qingniao.csproj; do
+            src/Penghou.Qingniao/Penghou.Qingniao.csproj \
+            src/Penghou.Qingniao.Codex/Penghou.Qingniao.Codex.csproj; do
             dotnet pack "$csproj" \
               --configuration Release \
               --output ./artifacts \
