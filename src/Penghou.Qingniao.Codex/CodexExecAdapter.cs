@@ -17,6 +17,8 @@ public sealed class CodexExecAdapter : IExternalOperationProvider
     private readonly ICodexProcessFactory processes;
     private readonly Func<DateTimeOffset> now;
     private readonly ConcurrentDictionary<string, TrackedOperation> operations = new(StringComparer.Ordinal);
+    private readonly object invocationLock = new();
+    private CodexProcessInvocation? lastInvocation;
 
     /// <summary>Creates an adapter for one Codex execution.</summary>
     public CodexExecAdapter(
@@ -31,7 +33,24 @@ public sealed class CodexExecAdapter : IExternalOperationProvider
     }
 
     /// <summary>Gets the last-spawned CLI invocation (diagnostics and tests).</summary>
-    public CodexProcessInvocation? LastInvocation { get; private set; }
+    public CodexProcessInvocation? LastInvocation
+    {
+        get
+        {
+            lock (invocationLock)
+            {
+                return lastInvocation;
+            }
+        }
+
+        private set
+        {
+            lock (invocationLock)
+            {
+                lastInvocation = value;
+            }
+        }
+    }
 
     internal int TrackedOperationCount => operations.Count;
 
