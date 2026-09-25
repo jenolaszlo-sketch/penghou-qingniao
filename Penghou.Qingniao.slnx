@@ -2,9 +2,11 @@
   <Folder Name="/src/">
     <Project Path="src/Penghou.Qingniao.Abstractions/Penghou.Qingniao.Abstractions.csproj" />
     <Project Path="src/Penghou.Qingniao/Penghou.Qingniao.csproj" />
+    <Project Path="src/Penghou.Qingniao.Codex/Penghou.Qingniao.Codex.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Penghou.Qingniao.Tests/Penghou.Qingniao.Tests.csproj" />
+    <Project Path="tests/Penghou.Qingniao.Codex.Tests/Penghou.Qingniao.Codex.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Penghou.Qingniao.Sample/Penghou.Qingniao.Sample.csproj" />

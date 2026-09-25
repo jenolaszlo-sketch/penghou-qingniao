@@ -1,0 +1,131 @@
+#nullable enable
+abstract Penghou.Qingniao.Codex.CodexJsonlEvent.<Clone>$() -> Penghou.Qingniao.Codex.CodexJsonlEvent!
+override Penghou.Qingniao.Codex.CodexExecOptions.Equals(object? obj) -> bool
+override Penghou.Qingniao.Codex.CodexExecOptions.GetHashCode() -> int
+override Penghou.Qingniao.Codex.CodexExecOptions.ToString() -> string!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.Equals(object? obj) -> bool
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.<Clone>$() -> Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.Equals(object? obj) -> bool
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.GetHashCode() -> int
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.ToString() -> string!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.GetHashCode() -> int
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.<Clone>$() -> Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.Equals(object? obj) -> bool
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.GetHashCode() -> int
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.ToString() -> string!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.ToString() -> string!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.<Clone>$() -> Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.Equals(object? obj) -> bool
+override Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.GetHashCode() -> int
+override Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.ToString() -> string!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.<Clone>$() -> Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.Equals(object? obj) -> bool
+override Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.GetHashCode() -> int
+override Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.ToString() -> string!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.<Clone>$() -> Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown!
+override Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Equals(object? obj) -> bool
+override Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.GetHashCode() -> int
+override Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.ToString() -> string!
+override Penghou.Qingniao.Codex.CodexProcessInvocation.Equals(object? obj) -> bool
+override Penghou.Qingniao.Codex.CodexProcessInvocation.GetHashCode() -> int
+override Penghou.Qingniao.Codex.CodexProcessInvocation.ToString() -> string!
+override sealed Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent? other) -> bool
+override sealed Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent? other) -> bool
+override sealed Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent? other) -> bool
+override sealed Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent? other) -> bool
+override sealed Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent? other) -> bool
+Penghou.Qingniao.Codex.CodexExecAdapter
+Penghou.Qingniao.Codex.CodexExecAdapter.CancelAsync(Penghou.Qingniao.ExternalOperationCancelRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationCancellationReceipt!>
+Penghou.Qingniao.Codex.CodexExecAdapter.CodexExecAdapter(Penghou.Qingniao.Codex.CodexExecOptions! options, Penghou.Qingniao.Codex.ICodexProcessFactory? processFactory = null, System.Func<System.DateTimeOffset>? clock = null) -> void
+Penghou.Qingniao.Codex.CodexExecAdapter.GetResultAsync(Penghou.Qingniao.ExternalOperationHandle! handle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationResult!>
+Penghou.Qingniao.Codex.CodexExecAdapter.LastInvocation.get -> Penghou.Qingniao.Codex.CodexProcessInvocation?
+Penghou.Qingniao.Codex.CodexExecAdapter.ObserveAsync(Penghou.Qingniao.ExternalOperationHandle! handle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationObservation!>
+Penghou.Qingniao.Codex.CodexExecAdapter.ResumeAsync(Penghou.Qingniao.ExternalOperationResumeRequest! request, Penghou.Qingniao.IExternalOperationHandleCaptureSink! handleSink, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationResumeReceipt!>
+Penghou.Qingniao.Codex.CodexExecAdapter.StartAsync(Penghou.Qingniao.ExternalOperationStartRequest! request, Penghou.Qingniao.IExternalOperationHandleCaptureSink! handleSink, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationStartReceipt!>
+Penghou.Qingniao.Codex.CodexExecOptions
+Penghou.Qingniao.Codex.CodexExecOptions.<Clone>$() -> Penghou.Qingniao.Codex.CodexExecOptions!
+Penghou.Qingniao.Codex.CodexExecOptions.ApprovedWorkspaceRoot.get -> string!
+Penghou.Qingniao.Codex.CodexExecOptions.CliPath.get -> string!
+Penghou.Qingniao.Codex.CodexExecOptions.CodexExecOptions(string! prompt, string! workspaceDirectory, string! approvedWorkspaceRoot, string! cliPath = "codex", Penghou.Qingniao.Codex.CodexSandboxMode sandbox = Penghou.Qingniao.Codex.CodexSandboxMode.WorkspaceWrite, string? model = null, string? outputSchemaPath = null, long maxOutputBytes = 1048576, bool ephemeral = false) -> void
+Penghou.Qingniao.Codex.CodexExecOptions.Ephemeral.get -> bool
+Penghou.Qingniao.Codex.CodexExecOptions.Equals(Penghou.Qingniao.Codex.CodexExecOptions? other) -> bool
+Penghou.Qingniao.Codex.CodexExecOptions.MaxOutputBytes.get -> long
+Penghou.Qingniao.Codex.CodexExecOptions.Model.get -> string?
+Penghou.Qingniao.Codex.CodexExecOptions.OutputSchemaPath.get -> string?
+Penghou.Qingniao.Codex.CodexExecOptions.Prompt.get -> string!
+Penghou.Qingniao.Codex.CodexExecOptions.Sandbox.get -> Penghou.Qingniao.Codex.CodexSandboxMode
+Penghou.Qingniao.Codex.CodexExecOptions.WorkspaceDirectory.get -> string!
+Penghou.Qingniao.Codex.CodexJsonlEvent
+Penghou.Qingniao.Codex.CodexJsonlEvent.CodexJsonlEvent(Penghou.Qingniao.Codex.CodexJsonlEvent! original) -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent
+Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.Deconstruct(out string! Message) -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent? other) -> bool
+Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.ErrorEvent(string! Message) -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.Message.get -> string!
+Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.Message.init -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted
+Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.Deconstruct(out string! ThreadId) -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted? other) -> bool
+Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.ThreadId.get -> string!
+Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.ThreadId.init -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.ThreadStarted(string! ThreadId) -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed
+Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.Deconstruct(out string! Message) -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed? other) -> bool
+Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.Message.get -> string!
+Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.Message.init -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.TurnFailed(string! Message) -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted
+Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted? other) -> bool
+Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown
+Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Deconstruct(out string! Type, out string! Raw) -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown? other) -> bool
+Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Raw.get -> string!
+Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Raw.init -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Type.get -> string!
+Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Type.init -> void
+Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.Unknown(string! Type, string! Raw) -> void
+Penghou.Qingniao.Codex.CodexProcessInvocation
+Penghou.Qingniao.Codex.CodexProcessInvocation.<Clone>$() -> Penghou.Qingniao.Codex.CodexProcessInvocation!
+Penghou.Qingniao.Codex.CodexProcessInvocation.Arguments.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.Codex.CodexProcessInvocation.Arguments.init -> void
+Penghou.Qingniao.Codex.CodexProcessInvocation.CliPath.get -> string!
+Penghou.Qingniao.Codex.CodexProcessInvocation.CliPath.init -> void
+Penghou.Qingniao.Codex.CodexProcessInvocation.CodexProcessInvocation(string! CliPath, System.Collections.Generic.IReadOnlyList<string!>! Arguments, string! WorkingDirectory) -> void
+Penghou.Qingniao.Codex.CodexProcessInvocation.Deconstruct(out string! CliPath, out System.Collections.Generic.IReadOnlyList<string!>! Arguments, out string! WorkingDirectory) -> void
+Penghou.Qingniao.Codex.CodexProcessInvocation.Equals(Penghou.Qingniao.Codex.CodexProcessInvocation? other) -> bool
+Penghou.Qingniao.Codex.CodexProcessInvocation.WorkingDirectory.get -> string!
+Penghou.Qingniao.Codex.CodexProcessInvocation.WorkingDirectory.init -> void
+Penghou.Qingniao.Codex.CodexSandboxMode
+Penghou.Qingniao.Codex.CodexSandboxMode.ReadOnly = 0 -> Penghou.Qingniao.Codex.CodexSandboxMode
+Penghou.Qingniao.Codex.CodexSandboxMode.WorkspaceWrite = 1 -> Penghou.Qingniao.Codex.CodexSandboxMode
+Penghou.Qingniao.Codex.ICodexProcess
+Penghou.Qingniao.Codex.ICodexProcess.Kill() -> void
+Penghou.Qingniao.Codex.ICodexProcess.ReadLinesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<string!>!
+Penghou.Qingniao.Codex.ICodexProcess.WaitForExitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Penghou.Qingniao.Codex.ICodexProcessFactory
+Penghou.Qingniao.Codex.ICodexProcessFactory.Start(Penghou.Qingniao.Codex.CodexProcessInvocation! invocation) -> Penghou.Qingniao.Codex.ICodexProcess!
+Penghou.Qingniao.Codex.ProcessCodexProcessFactory
+Penghou.Qingniao.Codex.ProcessCodexProcessFactory.ProcessCodexProcessFactory() -> void
+Penghou.Qingniao.Codex.ProcessCodexProcessFactory.Start(Penghou.Qingniao.Codex.CodexProcessInvocation! invocation) -> Penghou.Qingniao.Codex.ICodexProcess!
+static Penghou.Qingniao.Codex.CodexExecOptions.operator !=(Penghou.Qingniao.Codex.CodexExecOptions? left, Penghou.Qingniao.Codex.CodexExecOptions? right) -> bool
+static Penghou.Qingniao.Codex.CodexExecOptions.operator ==(Penghou.Qingniao.Codex.CodexExecOptions? left, Penghou.Qingniao.Codex.CodexExecOptions? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.operator !=(Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent? left, Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent.operator ==(Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent? left, Penghou.Qingniao.Codex.CodexJsonlEvent.ErrorEvent? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.operator !=(Penghou.Qingniao.Codex.CodexJsonlEvent? left, Penghou.Qingniao.Codex.CodexJsonlEvent? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.operator ==(Penghou.Qingniao.Codex.CodexJsonlEvent? left, Penghou.Qingniao.Codex.CodexJsonlEvent? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.operator !=(Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted? left, Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted.operator ==(Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted? left, Penghou.Qingniao.Codex.CodexJsonlEvent.ThreadStarted? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.TryParse(string? line) -> Penghou.Qingniao.Codex.CodexJsonlEvent?
+static Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.operator !=(Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed? left, Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed.operator ==(Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed? left, Penghou.Qingniao.Codex.CodexJsonlEvent.TurnFailed? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.Instance.get -> Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted!
+static Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.operator !=(Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted? left, Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted.operator ==(Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted? left, Penghou.Qingniao.Codex.CodexJsonlEvent.TurnStarted? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.operator !=(Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown? left, Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown? right) -> bool
+static Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown.operator ==(Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown? left, Penghou.Qingniao.Codex.CodexJsonlEvent.Unknown? right) -> bool
+static Penghou.Qingniao.Codex.CodexProcessInvocation.operator !=(Penghou.Qingniao.Codex.CodexProcessInvocation? left, Penghou.Qingniao.Codex.CodexProcessInvocation? right) -> bool
+static Penghou.Qingniao.Codex.CodexProcessInvocation.operator ==(Penghou.Qingniao.Codex.CodexProcessInvocation? left, Penghou.Qingniao.Codex.CodexProcessInvocation? right) -> bool
+virtual Penghou.Qingniao.Codex.CodexJsonlEvent.EqualityContract.get -> System.Type!
+virtual Penghou.Qingniao.Codex.CodexJsonlEvent.Equals(Penghou.Qingniao.Codex.CodexJsonlEvent? other) -> bool
+virtual Penghou.Qingniao.Codex.CodexJsonlEvent.PrintMembers(System.Text.StringBuilder! builder) -> bool

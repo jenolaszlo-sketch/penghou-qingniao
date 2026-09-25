@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <PackageId>Penghou.Qingniao.Codex</PackageId>
+    <Title>Penghou Qingniao Codex</Title>
+    <Description>Process-isolated Codex CLI execution adapter for Penghou Qingniao: approved workspaces, explicit sandbox, bounded output, early thread capture, and resume.</Description>
+    <PackageTags>delegation;supervision;agents;codex;execution;provider;ai;penghou;qingniao</PackageTags>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Penghou.Qingniao.Abstractions\Penghou.Qingniao.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

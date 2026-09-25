@@ -515,22 +515,32 @@ pass with deterministic fakes. Otherwise stop and revise the contracts.
 
 ## Milestone 3 — Codex execution capability slice
 
-Status: **planned**
+Status: **spike partial — adapter built and fixture-tested; live proof pending**
 
-- [ ] Implement an approved-workspace resolver and disposable candidate
-      provider for a sample repository.
-- [ ] Implement a process-isolated adapter around `codex exec --json` with an
+- [x] Implement an approved-workspace resolver and disposable candidate
+      provider for a sample repository (`CodexExecOptions` validates the
+      workspace against an approved root; `ProcessCodexProcessFactory`
+      spawns with an argv array and no shell).
+- [x] Implement a process-isolated adapter around `codex exec --json` with an
       output schema, explicit sandbox, bounded output, and early thread-ID
-      capture.
+      capture (`Penghou.Qingniao.Codex`: `CodexExecAdapter` captures
+      `thread.started` first, counts unmodeled events, never emits the CLI's
+      unsandboxed bypass flags; 15 tests on recorded + scripted streams).
+- [x] Prove the provider exposes a durable handle early: the first stdout
+      line of a real run is `thread.started` with the thread id (observed
+      0.157.0 against a usage-limited account).
 - [ ] Prove that a known Codex thread can be observed or resumed without
-      starting duplicate work.
+      starting duplicate work (adapter supports it; blocked on model quota).
 - [ ] Prove bounded implement-code execution without exposing Marang MCP or
-      credentials to the subordinate task.
-- [ ] Record resolved model/tool/usage provenance.
+      credentials to the subordinate task (blocked on model quota).
+- [ ] Record resolved model/tool/usage provenance (adapter records provider,
+      model override, thread lineage, and bounded transcript; live shapes
+      unproven).
 - [ ] Compare the CLI spike with an SDK/app-server bridge for cancellation,
       progress, approvals, and long-lived support.
 - [ ] Verify local authentication and subscription/API-key behavior without
-      claiming unavailable cost precision.
+      claiming unavailable cost precision (ChatGPT login verified; run
+      blocked by usage limit, resets daily).
 
 Exit: one economical Codex agent can reliably change a tiny disposable project,
 return structured evidence, reconnect after interruption, and remain inside

@@ -5,6 +5,14 @@ Notable changes to Penghou.Qingniao are recorded here. The project follows
 releases may still revise public contracts; every public API is tracked in
 `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` per package.
 
+## Unreleased
+
+- New `Penghou.Qingniao.Codex` package (not yet published): process-isolated
+  `codex exec --json` execution adapter with approved workspaces, explicit
+  sandbox, bounded output, early thread capture, and resume. Proven against
+  recorded CLI transcripts; the live bounded-execution and resume proofs wait
+  on model quota.
+
 ## 0.1.0-preview.2
 
 - Add the public `DelegationRuntime` facade over the in-memory delegation
