@@ -24,4 +24,8 @@
     <ProjectReference Include="..\Penghou.Qingniao.Abstractions\Penghou.Qingniao.Abstractions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Penghou.Qingniao.Codex.Tests" />
+  </ItemGroup>
+
 </Project>

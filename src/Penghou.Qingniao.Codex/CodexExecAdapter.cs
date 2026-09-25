@@ -33,6 +33,8 @@ public sealed class CodexExecAdapter : IExternalOperationProvider
     /// <summary>Gets the last-spawned CLI invocation (diagnostics and tests).</summary>
     public CodexProcessInvocation? LastInvocation { get; private set; }
 
+    internal int TrackedOperationCount => operations.Count;
+
     /// <summary>Starts one Codex execution and captures its thread handle.</summary>
     public async ValueTask<ExternalOperationStartReceipt> StartAsync(
         ExternalOperationStartRequest request,

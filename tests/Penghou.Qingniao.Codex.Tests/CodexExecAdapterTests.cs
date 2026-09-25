@@ -179,6 +179,62 @@ public sealed class CodexExecAdapterTests
     }
 
     [Fact]
+    public async Task Many_operations_evict_only_completed_tracking()
+    {
+        var counter = 0;
+        var factory = new ScriptedProcessFactory((_, _) =>
+        {
+            var id = Interlocked.Increment(ref counter);
+            return new ScriptedProcess(["{\"type\":\"thread.started\",\"thread_id\":\"thread-" + id + "\"}"], exitCode: 0);
+        });
+        var adapter = CreateAdapter(factory);
+        var sink = new RecordingHandleSink();
+        var ct = TestContext.Current.CancellationToken;
+
+        for (var index = 0; index < 130; index++)
+        {
+            await adapter.StartAsync(StartRequest(), sink, ct);
+        }
+
+        adapter.TrackedOperationCount.Should().BeLessThanOrEqualTo(128);
+        sink.Captures.Should().HaveCount(130);
+    }
+
+    [Fact]
+    public async Task Resume_rejecting_changed_thread_identity()
+    {
+        var factory = new ScriptedProcessFactory((_, _) => new ScriptedProcess(
+            ["""{"type":"thread.started","thread_id":"thread-other"}"""],
+            exitCode: 0));
+        var adapter = CreateAdapter(factory);
+        var sink = new RecordingHandleSink();
+        var ct = TestContext.Current.CancellationToken;
+
+        var resume = await adapter.ResumeAsync(
+            new ExternalOperationResumeRequest(TrackedHandle("thread-a"), "resume-1"), sink, ct);
+        var act = () => adapter.GetResultAsync(resume.Handle, ct).AsTask();
+        (await act.Should().ThrowAsync<ExternalOperationProviderException>())
+            .Which.Failure.Code.Should().Be("codex.thread-changed");
+    }
+
+    [Fact]
+    public async Task StartAsync_honors_caller_cancellation()
+    {
+        // No lines: the pump suspends before any thread identity, so the
+        // cancelled token is observed while actually waiting.
+        var factory = new ScriptedProcessFactory((_, _) => new ScriptedProcess(
+            [],
+            exitCode: 0,
+            hangAfterLines: true));
+        var adapter = CreateAdapter(factory);
+        var sink = new RecordingHandleSink();
+
+        var act = () => adapter.StartAsync(StartRequest(), sink, new CancellationToken(canceled: true)).AsTask();
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        sink.Captures.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Options_reject_workspace_outside_approved_root()
     {
         var factory = new ScriptedProcessFactory((_, _) => new ScriptedProcess([], exitCode: 0));
