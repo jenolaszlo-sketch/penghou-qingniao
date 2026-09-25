@@ -71,16 +71,18 @@ Marang and Guyabano demonstrate substantial identical adapter code. See
 
 ## Extraction
 
-Status: **extracted and committed; first preview publication pending**
+Status: **extracted and committed; `0.1.0-preview.2` published**
 
 - [x] Create the independent repository and solution layout.
 - [x] Copy the reviewed abstractions, runtime, tests, ADRs, and design notes.
 - [x] Rename namespaces, project identities, packages, and public API baselines.
 - [x] Verify build, formatting, all tests, package contents, and API analysis.
 - [x] Record the extraction commit.
-- [ ] Publish `0.1.0-preview.1` after the current Milestone 2 package gate.
-- [ ] Replace Marang's duplicate runtime sources with its service boundary after
-      the Qingniao package is available.
+- [x] Publish `0.1.0-preview.1` after the current Milestone 2 package gate
+      (`0.1.0-preview.2` published with the `DelegationRuntime` facade).
+- [x] Replace Marang's duplicate runtime sources with its service boundary after
+      the Qingniao package is available (Marang consumes `0.1.0-preview.2`;
+      old sources superseded).
 
 ## Gate 0.5 — Primitive capability audit
 

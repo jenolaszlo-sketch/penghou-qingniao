@@ -10,3 +10,5 @@ TestResults/
 artifacts/
 coverage/
 coverage-*/
+coverage.*.xml
+coverage.json

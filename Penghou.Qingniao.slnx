@@ -6,4 +6,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Penghou.Qingniao.Tests/Penghou.Qingniao.Tests.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Penghou.Qingniao.Sample/Penghou.Qingniao.Sample.csproj" />
+  </Folder>
 </Solution>

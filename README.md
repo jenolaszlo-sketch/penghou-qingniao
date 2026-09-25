@@ -155,13 +155,16 @@ contracts plus reusable validation, identity, registry, fingerprint, provider,
 and policy components.
 
 Next milestones add a bounded Codex execution adapter and map the proven
-semantics to durable Zhinu execution. First package publication is still
-pending; consumers should treat the repository as pre-release source.
+semantics to durable Zhinu execution. Packages are published as previews
+(`0.1.0-preview.2`); consumers should still treat the repository as
+pre-release source.
 
 See:
 
 - [Architecture](docs/architecture.md)
 - [Roadmap and milestone status](docs/roadmap.md)
+- [Changelog](CHANGELOG.md)
+- [Runnable sample](samples/Penghou.Qingniao.Sample/Program.cs)
 - [Agent execution boundary](docs/agent-execution.md)
 - [Protocol boundaries](docs/protocol-boundaries.md)
 - [Security](SECURITY.md)
