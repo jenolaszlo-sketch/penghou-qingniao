@@ -515,7 +515,7 @@ pass with deterministic fakes. Otherwise stop and revise the contracts.
 
 ## Milestone 3 — Codex execution capability slice
 
-Status: **spike partial — adapter built and fixture-tested; live proof pending**
+Status: **live proof complete 2026-09-26 (codex-cli 0.157.0, ChatGPT account)**
 
 - [x] Implement an approved-workspace resolver and disposable candidate
       provider for a sample repository (`CodexExecOptions` validates the
@@ -529,22 +529,46 @@ Status: **spike partial — adapter built and fixture-tested; live proof pending
 - [x] Prove the provider exposes a durable handle early: the first stdout
       line of a real run is `thread.started` with the thread id (observed
       0.157.0 against a usage-limited account).
-- [ ] Prove that a known Codex thread can be observed or resumed without
-      starting duplicate work (adapter supports it; blocked on model quota).
-- [ ] Prove bounded implement-code execution without exposing Marang MCP or
-      credentials to the subordinate task (blocked on model quota).
-- [ ] Record resolved model/tool/usage provenance (adapter records provider,
-      model override, thread lineage, and bounded transcript; live shapes
-      unproven).
+- [x] Prove that a known Codex thread can be observed or resumed without
+      starting duplicate work: a fresh adapter resumed a captured thread id
+      with disposition `Existing`; the resume argv was
+      `exec resume <thread> --json …` with no prompt text; observations were
+      served to terminal state (proven 2026-09-26).
+- [x] Prove bounded implement-code execution without exposing Marang MCP or
+      credentials to the subordinate task: a disposable workspace-write run
+      created exactly `hello.txt` with exact content and nothing else; no MCP
+      surface or credentials cross the adapter boundary by construction
+      (proven 2026-09-26).
+- [x] Record resolved model/tool/usage provenance: provider `codex`, no model
+      override (CLI default), thread lineage, bounded transcript tail, and
+      observation counts are recorded per run. Live `turn.completed` usage
+      shapes (`input_tokens`, `cached_input_tokens`, `output_tokens`) were
+      observed but remain unmodeled (counted as unknown); modeling them is
+      follow-up work, not a gate.
+- [x] Fix stdin hang found by the live proof: `codex exec` blocks on
+      redirected stdin, so the factory now closes stdin at spawn; without it
+      no live run can start.
 - [ ] Compare the CLI spike with an SDK/app-server bridge for cancellation,
       progress, approvals, and long-lived support.
-- [ ] Verify local authentication and subscription/API-key behavior without
-      claiming unavailable cost precision (ChatGPT login verified; run
-      blocked by usage limit, resets daily).
+- [x] Verify local authentication and subscription/API-key behavior without
+      claiming unavailable cost precision (ChatGPT login verified; live runs
+      succeed on quota; usage-limit failures classify as non-retryable
+      `codex.usage-limit`).
 
 Exit: one economical Codex agent can reliably change a tiny disposable project,
 return structured evidence, reconnect after interruption, and remain inside
-host policy.
+host policy. **Met 2026-09-26: two tiny turns (one success, one
+interrupt-plus-resume).**
+
+Go/no-go: **GO for M4 planning.** The provider exposes a durable handle
+early, reconnects without duplicate work, stays inside workspace/credential
+policy, and produces verifiable evidence. The SDK-bridge comparison remains
+open but is not a gate.
+
+Exit: one economical Codex agent can reliably change a tiny disposable project,
+return structured evidence, reconnect after interruption, and remain inside
+host policy. **Met 2026-09-26 (see above); the pre-proof criteria below are
+retained as the standing gate for any future provider.**
 
 Go/no-go: continue only if the provider exposes a durable handle early,
 reconnects without duplicate work, stays inside workspace/credential policy,
@@ -717,3 +741,59 @@ contract and a concrete interoperability need; otherwise keep it deferred.
 - Treating Agent Card capability claims as authorization or automatically
   transmitting repository contents to remote agents.
 - Returning complete worker transcripts in normal MCP results.
+
+## V2 — Evidence-driven workflow evolution (deferred)
+
+Status: **future work after V1; not a current release gate**. Added 2026-09-26.
+V2.1/V2.2/V2.3 name cross-project delivery stages, not package or IR versions.
+Existing near-term priorities and completed work retain their current status.
+
+Architecture and shared acceptance gates: [reviewed V2 specification](../../Penghou.Guihua/docs/evidence-driven-workflow-evolution-v2.md).
+Cross-repository links assume sibling checkouts.
+
+### V2.1 — Outcome and repair evidence integration
+
+- [ ] Map existing immutable candidate revisions, deterministic validation,
+  review, bounded correction and terminal results into the shared evidence
+  profile with exact delegation, external fence, execution epoch,
+  `NodeGeneration`, attempt/handle and artifact identities.
+- [ ] Keep provider execution, evaluator assertions, host acceptance and
+  supersession distinct. Evaluator faults/missing evidence are not proof of
+  poor candidate quality; model review cannot override deterministic receipts.
+- [ ] Publish repair/override/correction relationships and actual additional
+  effort without reopening a terminal result. Preserve all first-candidate
+  evidence when a bounded correction succeeds.
+- [ ] Reuse the Milestone 4 host adapter/outbox boundary for durable delivery;
+  Hongxian/Fuwen/Zhinu types stay outside core.
+
+Gate: an externally completed but rejected candidate can cause a host-requested
+new semantic generation/delegation while the original result remains immutable.
+
+### V2.2 — Execute explicitly selected experiment candidates
+
+- [ ] Accept host-selected providers for separately identified experiment
+  candidates with distinct sealed artifacts, approved workspaces, operation
+  keys and budgets. Map experiment candidate identity to existing candidate
+  revision identity rather than overloading `CandidateId`.
+- [ ] Reconnect ambiguous external acceptance through the existing handle;
+  cancellations retain honest uncertainty and accumulated evidence.
+- [ ] Report all provider, evaluator and correction work to host-level aggregate
+  accounting, including failed/losing candidates and unsupported cost estimates.
+- [ ] Enforce the delegated capability/effect limits and refuse unsupported
+  isolation; the first slice permits isolated/pure/read-only work before any
+  separately authorized publication.
+
+Gate: candidates cannot contaminate artifacts, duplicate accepted provider work
+or hide cost behind retries; selection and workflow progression remain outside
+Qingniao.
+
+### V2.3 — Evidence-informed caller selection
+
+- [ ] Expose exact provider/capability/version and outcome references needed by
+  external selection policy; preserve which host decision selected the provider.
+- [ ] Test that advisory history never changes an admitted caller-selected
+  provider or expands capabilities. Guihua/host policy may propose a different
+  provider in new admitted work; Baize handles model routing.
+
+This preserves the current explicit-provider contract. It does not add an
+internal provider tournament, workflow optimizer or hidden routing fallback.

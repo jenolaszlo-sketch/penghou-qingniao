@@ -51,6 +51,10 @@ public sealed class ProcessCodexProcessFactory : ICodexProcessFactory
 
         var process = Process.Start(start)
             ?? throw new InvalidOperationException($"Could not start '{invocation.CliPath}'.");
+        // `codex exec` waits for stdin EOF when input is redirected; the
+        // adapter never drives interactive input, so close it at spawn or
+        // every invocation hangs before the first event.
+        process.StandardInput.Close();
         return new ProcessCodexProcess(process);
     }
 
