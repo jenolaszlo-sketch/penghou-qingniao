@@ -31,3 +31,11 @@ Penghou.Qingniao.SupervisorCheckpointDescriptor.Session.get -> Penghou.Qingniao.
 Penghou.Qingniao.SupervisorCheckpointDescriptor.Fence.get -> Penghou.Qingniao.DelegationAdmissionFence?
 static Penghou.Qingniao.ContextProvenanceReference.Snapshot(string! provider, string! identifier, string? contentHash = null) -> Penghou.Qingniao.ContextProvenanceReference!
 static Penghou.Qingniao.ContextProvenanceReference.Publication(string! provider, string! kind, string! identifier, string? revision = null, string? contentHash = null) -> Penghou.Qingniao.ContextProvenanceReference!
+Penghou.Qingniao.IDelegationInputMaterializer
+Penghou.Qingniao.IDelegationInputMaterializer.Materialize(Penghou.Qingniao.DelegationRequest! request, Penghou.Qingniao.DelegationId delegationId) -> Penghou.Qingniao.MaterializedDelegationInputs!
+Penghou.Qingniao.MaterializedDelegationInputs
+Penghou.Qingniao.MaterializedDelegationInputs.MaterializedDelegationInputs(System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>! inputArtifacts, Penghou.Qingniao.ExternalOperationBudgetHint? budget, System.DateTimeOffset? deadline, Penghou.Qingniao.ExternalAgentReference! agent) -> void
+Penghou.Qingniao.MaterializedDelegationInputs.Agent.get -> Penghou.Qingniao.ExternalAgentReference!
+Penghou.Qingniao.MaterializedDelegationInputs.Budget.get -> Penghou.Qingniao.ExternalOperationBudgetHint?
+Penghou.Qingniao.MaterializedDelegationInputs.Deadline.get -> System.DateTimeOffset?
+Penghou.Qingniao.MaterializedDelegationInputs.InputArtifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!

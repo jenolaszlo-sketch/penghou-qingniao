@@ -2,8 +2,12 @@ namespace Penghou.Qingniao.Codex;
 
 /// <summary>
 /// One Codex execution: the task prompt, the approved workspace it may touch,
-/// and the bounds the host enforces. The workspace directory must sit under
-/// <see cref="ApprovedWorkspaceRoot"/>; the adapter refuses anything else.
+/// and the bounds the host enforces. Both directories are stored as canonical
+/// absolute paths with symlinks, junctions and reparse points resolved: the
+/// workspace must sit strictly beneath <see cref="ApprovedWorkspaceRoot"/> on
+/// the physical filesystem, never be the root itself, and never escape it
+/// through a link. Re-validate with <see cref="ValidateWorkspaceBeforeLaunch"/>
+/// immediately before spawning; path checks alone are not a sandbox.
 /// </summary>
 public sealed record CodexExecOptions
 {
@@ -20,14 +24,10 @@ public sealed record CodexExecOptions
         bool ephemeral = false)
     {
         Prompt = RequireText(prompt, nameof(prompt), 32_768);
-        WorkspaceDirectory = RequirePath(workspaceDirectory, nameof(workspaceDirectory));
-        ApprovedWorkspaceRoot = RequirePath(approvedWorkspaceRoot, nameof(approvedWorkspaceRoot));
-        if (!IsUnderRoot(WorkspaceDirectory, ApprovedWorkspaceRoot))
-        {
-            throw new ArgumentException(
-                "The workspace directory must sit under the approved workspace root.",
-                nameof(workspaceDirectory));
-        }
+        var workspace = RequirePath(workspaceDirectory, nameof(workspaceDirectory));
+        var root = RequirePath(approvedWorkspaceRoot, nameof(approvedWorkspaceRoot));
+        (WorkspaceDirectory, ApprovedWorkspaceRoot) = WorkspacePathResolution.ResolveAndValidate(
+            workspace, root, PhysicalWorkspaceFileSystem.Instance);
 
         CliPath = RequireText(cliPath, nameof(cliPath), 1_024);
         if (!Enum.IsDefined(sandbox))
@@ -51,9 +51,9 @@ public sealed record CodexExecOptions
 
     /// <summary>Gets the task instruction sent to Codex.</summary>
     public string Prompt { get; }
-    /// <summary>Gets the workspace Codex runs in.</summary>
+    /// <summary>Gets the workspace Codex runs in: canonical absolute, physically resolved, strictly beneath the approved root.</summary>
     public string WorkspaceDirectory { get; }
-    /// <summary>Gets the approved root the workspace must sit under.</summary>
+    /// <summary>Gets the approved root the workspace must sit under: canonical absolute and physically resolved.</summary>
     public string ApprovedWorkspaceRoot { get; }
     /// <summary>Gets the CLI executable name or path.</summary>
     public string CliPath { get; }
@@ -86,11 +86,31 @@ public sealed record CodexExecOptions
 
     private static string RequirePath(string? value, string name) => RequireText(value, name, 32_768);
 
-    private static bool IsUnderRoot(string directory, string root)
+    /// <summary>
+    /// Re-validates physical containment immediately before launch and returns
+    /// the canonical workspace directory to spawn in.
+    /// </summary>
+    /// <remarks>
+    /// Construction-time validation cannot see links swapped afterwards, so
+    /// the adapter (and any direct host use) must call this right before
+    /// spawning and refuse on failure. A changing filesystem is an access
+    /// refusal, not a caller argument error.
+    /// </remarks>
+    /// <returns>The canonical workspace directory.</returns>
+    /// <exception cref="UnauthorizedAccessException">Containment can no longer be established.</exception>
+    public string ValidateWorkspaceBeforeLaunch()
     {
-        var fullDirectory = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar);
-        var fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
-        return fullDirectory.Equals(fullRoot, StringComparison.OrdinalIgnoreCase)
-            || fullDirectory.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            var (workspace, _) = WorkspacePathResolution.ResolveAndValidate(
+                WorkspaceDirectory, ApprovedWorkspaceRoot, PhysicalWorkspaceFileSystem.Instance);
+            return workspace;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new UnauthorizedAccessException(
+                "The workspace is no longer contained beneath its approved root; launch is refused.",
+                exception);
+        }
     }
 }

@@ -8,6 +8,16 @@ namespace Penghou.Qingniao;
 /// context) that drives executions to completion. All policy lives in the
 /// injected host seams; this type only wires and delegates.
 /// </summary>
+/// <remarks>
+/// Retention model. Runtime execution state is process-local: acceptance plus
+/// execution initialization happen atomically under one gate, but only while
+/// this instance lives. A retained acceptance registry without its execution
+/// store cannot resume or relaunch here — acceptance replays fail closed
+/// instead. Persisting acceptance alone is never durable execution; durable
+/// recovery across restarts belongs to the Zhinu-backed host integration.
+/// The execution store itself is bounded (256 entries); live runtime state
+/// lives for the process lifetime and is bounded by it.
+/// </remarks>
 public sealed class DelegationRuntime : IDelegationService
 {
     private readonly InMemoryDelegationCoordinator coordinator;
@@ -17,7 +27,9 @@ public sealed class DelegationRuntime : IDelegationService
     /// host policy seams follow the same rules as the underlying coordinator:
     /// acceptance and intervention registries default to in-memory, the
     /// admission verifier defaults to admit-all, and a verification policy is
-    /// required whenever candidate evaluators are configured.
+    /// required whenever candidate evaluators are configured. Without an input
+    /// materializer, provider starts carry the legacy unmaterialized shape
+    /// (empty inputs, no bounds, provider-name-derived agent record).
     /// </summary>
     public DelegationRuntime(
         IDelegationAcceptanceRegistry acceptanceRegistry,
@@ -32,7 +44,8 @@ public sealed class DelegationRuntime : IDelegationService
         IDeterministicCandidateValidator? candidateValidator = null,
         IIndependentCandidateReviewer? candidateReviewer = null,
         ICandidateCorrector? candidateCorrector = null,
-        ICandidateVerificationPolicy? verificationPolicy = null) =>
+        ICandidateVerificationPolicy? verificationPolicy = null,
+        IDelegationInputMaterializer? inputMaterializer = null) =>
         coordinator = new InMemoryDelegationCoordinator(
             acceptanceRegistry,
             admissionVerifier,
@@ -48,7 +61,8 @@ public sealed class DelegationRuntime : IDelegationService
             candidateValidator,
             candidateReviewer,
             candidateCorrector,
-            verificationPolicy);
+            verificationPolicy,
+            inputMaterializer);
 
     /// <summary>Accepts a request and returns its delegation handle.</summary>
     public async Task<DelegationHandle> DelegateAsync(

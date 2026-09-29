@@ -469,7 +469,7 @@ target. The matrix includes provider-phase failures, semantic rejection,
 cancellation reconciliation, resource/retry ceilings, waiting, and
 immutable terminal replay.
 
-Before the coordinator becomes public, combine acceptance and execution-state
+The public DelegationRuntime facade shipped in 0.1.0-preview.2, but its in-memory state is not durable. The following remain open hardening (QH-04/QH-05), not pre-public gates: combine acceptance and execution-state
 initialization under one atomic authority, bound its retained state, publish the
 actual delegated objective as an immutable input artifact, and introduce
 trusted external-agent/protocol metadata rather than deriving it from a
@@ -719,6 +719,28 @@ contract and a concrete interoperability need; otherwise keep it deferred.
 - Optional A2A bridges for valuable non-A2A agents, only where the bridge adds
   real interoperability value.
 
+## Review follow-ups — 2026-09-29
+
+- [ ] In Milestone 5, offer a bounded, immutable candidate diff artifact with
+      base/head revision identities and an integrity hash. Capture it through
+      the deterministic executor after the candidate revision is sealed; do
+      not treat a worker's diff claim as verification evidence.
+- [ ] In Milestone 6, authorize supervisor interventions at the authenticated
+      host/MCP boundary by caller and delegation scope, then retain the policy
+      decision with the intervention receipt. Core intervention records remain
+      transport-neutral.
+- [ ] In Milestone 6, assess a resumable, bounded progress feed based on durable
+      status/evidence cursors. Define retention and backpressure before exposing
+      it to UIs; raw subprocess output and private agent reasoning are not
+      general-purpose progress events.
+- [ ] In Milestone 7, add a small DI registration extension for stable host
+      services if the first real application integration shows repeated manual
+      wiring. Keep optional framework dependencies outside core.
+
+The proposed standalone Qingniao SQLite store is already covered by Milestone
+4's Zhinu-owned recovery work. A direct durable delegation must still use the
+host's durable execution authority; Qingniao does not duplicate it.
+
 ## Non-goals
 
 - Replacing Codex or becoming a general autonomous coding agent.
@@ -797,3 +819,30 @@ Qingniao.
 
 This preserves the current explicit-provider contract. It does not add an
 internal provider tournament, workflow optimizer or hidden routing fallback.
+
+## Review hardening and implementation handoff — 2026-09-28
+
+The [implementation handoff plan](implementation-handoff-plan.md) turns the
+[boundary review](architecture-boundary-review-2026-09-28.md) into bounded
+assignments with dependencies, acceptance tests and model handoff instructions.
+Status: **QH-00 complete (baseline + wording, 2026-09-28); QH-01–QH-10 planned; no code implementation is marked complete by adding this plan**.
+
+| Work | Task IDs | Relationship to existing roadmap |
+| --- | --- | --- |
+| Baseline, process I/O, containment and operation lifecycle | QH-00–QH-03 | Harden M3; preserve its recorded 2026-09-26 live proof |
+| Admitted inputs, public-runtime guarantees and frozen receipts | QH-04–QH-06 | Close post-M2 gaps; extend M3 coverage and M5 foundations |
+| Verify upstream authority and durable host integration | QH-07–QH-08 | Gate 0.5 and M4; no workflow dependencies in core |
+| Evidence/UX, package independence and measured dogfood | QH-09–QH-10 | M5, downstream M6, M7 and non-code consumer gate |
+
+Start with QH-00, then QH-01/QH-02 with separate file ownership. QH-07 can
+independently audit prerequisites. The plan distinguishes the completed M3
+feasibility proof from remaining protocol/concurrency/recovery regression work.
+The SDK/app-server comparison remains non-blocking. M8 and V2 keep their
+existing deferred status; host integration follows ADR 0017.
+
+## Pending dependency: Penghou.Hufu
+
+Recorded 2026-09-28. Hufu is currently a scaffold; its authority contracts, store,
+and enforcement integration are pending. Bind Hufu authority to attenuated delegation and enforce it through provider adapters.
+See [the project-specific integration note](hufu-integration.md) for scope, dependencies,
+and completion evidence. This records future work without changing current release gates.

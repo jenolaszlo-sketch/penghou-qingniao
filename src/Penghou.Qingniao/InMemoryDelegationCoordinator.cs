@@ -43,6 +43,7 @@ internal sealed class InMemoryDelegationCoordinator
     private readonly IIndependentCandidateReviewer? candidateReviewer;
     private readonly ICandidateCorrector? candidateCorrector;
     private readonly ICandidateVerificationPolicy verificationPolicy;
+    private readonly IDelegationInputMaterializer? inputMaterializer;
     private readonly CandidateEvaluationRunner evaluationRunner;
     private readonly Func<DateTimeOffset> now;
 
@@ -61,7 +62,8 @@ internal sealed class InMemoryDelegationCoordinator
         IDeterministicCandidateValidator? candidateValidator = null,
         IIndependentCandidateReviewer? candidateReviewer = null,
         ICandidateCorrector? candidateCorrector = null,
-        ICandidateVerificationPolicy? verificationPolicy = null)
+        ICandidateVerificationPolicy? verificationPolicy = null,
+        IDelegationInputMaterializer? inputMaterializer = null)
     {
         this.acceptanceRegistry = acceptanceRegistry ?? throw new ArgumentNullException(nameof(acceptanceRegistry));
         this.admissionVerifier = admissionVerifier;
@@ -88,6 +90,7 @@ internal sealed class InMemoryDelegationCoordinator
         }
 
         this.verificationPolicy = verificationPolicy ?? FailClosedVerificationPolicy.Instance;
+        this.inputMaterializer = inputMaterializer;
         if (this.verificationPolicy.MaxVerificationRounds < 1)
         {
             throw new ArgumentOutOfRangeException(
@@ -154,13 +157,32 @@ internal sealed class InMemoryDelegationCoordinator
 
         lock (stateGate)
         {
-            if (!acceptance.IsNew)
+            if (!acceptance.IsNew && states.ContainsKey(acceptance.DelegationId))
             {
-                if (states.ContainsKey(acceptance.DelegationId))
-                {
-                    return acceptance;
-                }
+                return acceptance;
             }
+        }
+
+        if (!acceptance.IsNew)
+        {
+            // A replayed acceptance without live runtime state is only safe to
+            // complete when no execution record exists either: provider contact
+            // is impossible without runtime state, so rebuilding is virgin
+            // initialization rather than a relaunch. Any retained execution
+            // record means unknown history (a previous generation may have run
+            // elsewhere), which this in-memory runtime refuses to silently
+            // relaunch or take over. Durable recovery across restarts belongs
+            // to the Zhinu-backed host integration, not to this store.
+            try
+            {
+                await executionStore.GetAsync(acceptance.DelegationId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (DelegationExecutionNotFoundException)
+            {
+                return await InitializeRuntimeAsync(acceptance, request, cancellationToken).ConfigureAwait(false);
+            }
+
+            throw new DelegationCoordinatorStateUnavailableException(acceptance.DelegationId);
         }
 
         return await InitializeRuntimeAsync(acceptance, request, cancellationToken).ConfigureAwait(false);
@@ -208,6 +230,20 @@ internal sealed class InMemoryDelegationCoordinator
             }
         }
 
+        MaterializedDelegationInputs? materialized = null;
+        if (adapter is not null)
+        {
+            // Host materialization turns the admitted objective, workspace,
+            // criteria and context into immutable provider inputs bound into
+            // the start identity below. It runs on every initialization
+            // (including virgin replays), so it must be deterministic and
+            // side-effect free; provider contact happens later in the pump,
+            // never here. Without a host materializer the start carries the
+            // legacy unmaterialized shape: empty inputs, no bounds, and a
+            // provider-name-derived agent record.
+            materialized = inputMaterializer?.Materialize(request, acceptance.DelegationId);
+        }
+
         DateTimeOffset acceptedAt;
         try
         {
@@ -237,7 +273,8 @@ internal sealed class InMemoryDelegationCoordinator
             adapter,
             providerFailure,
             fingerprintVerifier,
-            acceptedAt);
+            acceptedAt,
+            materialized);
 
         lock (stateGate)
         {
@@ -941,6 +978,55 @@ internal sealed class InMemoryDelegationCoordinator
             || (runtime.CancellationReceipt.Disposition == ExternalOperationCancellationDisposition.AlreadyTerminal
                 && runtime.CancellationReceipt.State == ExternalOperationState.Cancelled));
 
+    /// <summary>
+    /// Runs one provider call without holding the per-runtime gate. The caller
+    /// reserves attempt and revision state under the gate first (worker-call
+    /// accounting, the in-flight marker, cancellation intent); the gate stays
+    /// free while provider I/O is pending so cancellation intent and duration
+    /// checks remain observable, then the caller reconciles the outcome under
+    /// the same fence. Provider work is durable: the caller's transport token
+    /// never cancels it, so caller-wait cancellation, operation deadlines, and
+    /// cancellation of externally accepted work stay three separate
+    /// mechanisms. Re-acquisition cannot deadlock: no path holds this gate
+    /// across the call, and providers must not call back into the coordinator.
+    /// </summary>
+    private async ValueTask<T> CallProviderOutsideGateAsync<T>(
+        RuntimeState runtime,
+        Func<CancellationToken, ValueTask<T>> call)
+    {
+        System.Diagnostics.Debug.Assert(runtime.Gate.CurrentCount == 0, "Provider calls require the runtime gate.");
+        runtime.Gate.Release();
+        try
+        {
+            return await call(CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            await runtime.Gate.WaitAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Re-reads the execution store after provider I/O. A terminal store wins
+    /// outright and any revision movement means another pump already advanced
+    /// the delegation, so the late provider outcome is stale. Returns the
+    /// superseding snapshot, or null when the caller may proceed.
+    /// </summary>
+    private async ValueTask<DelegationExecutionSnapshot?> ReconcileProviderReturnAsync(
+        DelegationId delegationId,
+        long reservedRevision,
+        CancellationToken cancellationToken)
+    {
+        var fresh = await executionStore.GetAsync(delegationId, cancellationToken).ConfigureAwait(false);
+        if (DelegationLifecycle.IsTerminal(fresh.Progress.State)
+            || fresh.Progress.Revision != reservedRevision)
+        {
+            return fresh;
+        }
+
+        return null;
+    }
+
     private async ValueTask<DelegationExecutionSnapshot> PumpStartAsync(
         RuntimeState runtime,
         DelegationExecutionSnapshot current,
@@ -986,6 +1072,15 @@ internal sealed class InMemoryDelegationCoordinator
             {
                 return durationExceeded;
             }
+        }
+
+        if (runtime.InFlightProviderCall == current.Progress.Revision)
+        {
+            // Another pump reserved this revision for provider I/O and has not
+            // settled it. Wait (return current) instead of publishing or
+            // launching duplicate work; duration already ran above so bounds
+            // stay observable through the stalled call.
+            return current;
         }
 
         if (current.Progress.State == DelegationState.Queued)
@@ -1039,122 +1134,144 @@ internal sealed class InMemoryDelegationCoordinator
                 cancellationToken).ConfigureAwait(false);
         }
 
-        ExternalOperationStartReceipt receipt;
+        var reservedRevision = current.Progress.Revision;
+        runtime.InFlightProviderCall = reservedRevision;
         try
         {
-            receipt = await runtime.Adapter.StartAsync(
-                runtime.StartRequest!,
-                handleRegistry,
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (ExternalOperationProviderException exception)
-        {
-            if (handleRegistry.TryGet(runtime.Correlation, out var capture) && capture is not null)
+            ExternalOperationStartReceipt receipt;
+            try
             {
-                runtime.Handle = capture.Handle;
+                receipt = await CallProviderOutsideGateAsync(
+                    runtime,
+                    providerToken => runtime.Adapter.StartAsync(
+                        runtime.StartRequest!, handleRegistry, providerToken)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (ExternalOperationProviderException exception)
+            {
+                if (handleRegistry.TryGet(runtime.Correlation, out var capture) && capture is not null)
+                {
+                    runtime.Handle = capture.Handle;
+                    runtime.Phase = CoordinatorPhase.Observe;
+                    return pendingCancellation
+                        ? await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false)
+                        : current;
+                }
+
+                if (exception.Failure.Retryable)
+                {
+                    runtime.Phase = CoordinatorPhase.Start;
+                    return current;
+                }
+
+                if (pendingCancellation)
+                {
+                    runtime.Phase = CoordinatorPhase.Start;
+                    return current;
+                }
+
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Failed,
+                    ClassifiedFailureSummary("start", exception.Failure),
+                    [],
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                if (handleRegistry.TryGet(runtime.Correlation, out var capture) && capture is not null)
+                {
+                    runtime.Handle = capture.Handle;
+                    runtime.Phase = CoordinatorPhase.Observe;
+                    return pendingCancellation
+                        ? await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false)
+                        : current;
+                }
+
+                if (pendingCancellation)
+                {
+                    runtime.Phase = CoordinatorPhase.Start;
+                    return current;
+                }
+
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Failed,
+                    UnclassifiedFailureSummary("start"),
+                    [],
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            // Refresh under the same fence: cancellation may have been recorded
+            // while the start call was pending, and another pump may have moved
+            // the store meanwhile. A terminal store or any revision movement
+            // discards this late outcome instead of overwriting newer state.
+            pendingCancellation = runtime.CancellationRequest is not null
+                || runtime.CancellationKey is not null;
+            var supersededStart = await ReconcileProviderReturnAsync(
+                runtime.DelegationId, reservedRevision, cancellationToken).ConfigureAwait(false);
+            if (supersededStart is not null)
+            {
+                return supersededStart;
+            }
+
+            try
+            {
+                ArgumentNullException.ThrowIfNull(receipt);
+                if (receipt.Identity != runtime.StartIdentity)
+                {
+                    throw new InvalidOperationException(
+                        "The provider start receipt does not match the exact accepted start identity.");
+                }
+
+                await CaptureReturnedHandleAsync(receipt, cancellationToken).ConfigureAwait(false);
+                runtime.Handle = receipt.Handle;
                 runtime.Phase = CoordinatorPhase.Observe;
                 return pendingCancellation
                     ? await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false)
                     : current;
             }
-
-            if (exception.Failure.Retryable)
+            catch (OperationCanceledException)
             {
-                runtime.Phase = CoordinatorPhase.Start;
-                return current;
+                throw;
             }
-
-            if (pendingCancellation)
+            catch (Exception)
             {
-                runtime.Phase = CoordinatorPhase.Start;
-                return current;
-            }
+                if (pendingCancellation
+                    && handleRegistry.TryGet(runtime.Correlation, out var recovered)
+                    && recovered is not null)
+                {
+                    runtime.Handle = recovered.Handle;
+                    runtime.Phase = CoordinatorPhase.Observe;
+                    return await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false);
+                }
 
-            runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(
-                runtime,
-                current,
-                DelegationState.Failed,
-                ClassifiedFailureSummary("start", exception.Failure),
-                [],
-                cancellationToken).ConfigureAwait(false);
+                if (pendingCancellation)
+                {
+                    runtime.Phase = CoordinatorPhase.Start;
+                    return current;
+                }
+
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Failed,
+                    "Provider start receipt validation failed.",
+                    [],
+                    cancellationToken).ConfigureAwait(false);
+            }
         }
-        catch
+        finally
         {
-            if (handleRegistry.TryGet(runtime.Correlation, out var capture) && capture is not null)
-            {
-                runtime.Handle = capture.Handle;
-                runtime.Phase = CoordinatorPhase.Observe;
-                return pendingCancellation
-                    ? await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false)
-                    : current;
-            }
-
-            if (pendingCancellation)
-            {
-                runtime.Phase = CoordinatorPhase.Start;
-                return current;
-            }
-
-            runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(
-                runtime,
-                current,
-                DelegationState.Failed,
-                UnclassifiedFailureSummary("start"),
-                [],
-                cancellationToken).ConfigureAwait(false);
-        }
-
-        try
-        {
-            ArgumentNullException.ThrowIfNull(receipt);
-            if (receipt.Identity != runtime.StartIdentity)
-            {
-                throw new InvalidOperationException(
-                    "The provider start receipt does not match the exact accepted start identity.");
-            }
-
-            await CaptureReturnedHandleAsync(receipt, cancellationToken).ConfigureAwait(false);
-            runtime.Handle = receipt.Handle;
-            runtime.Phase = CoordinatorPhase.Observe;
-            return pendingCancellation
-                ? await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false)
-                : current;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            if (pendingCancellation
-                && handleRegistry.TryGet(runtime.Correlation, out var recovered)
-                && recovered is not null)
-            {
-                runtime.Handle = recovered.Handle;
-                runtime.Phase = CoordinatorPhase.Observe;
-                return await CancelKnownHandleAsync(runtime, current, cancellationToken).ConfigureAwait(false);
-            }
-
-            if (pendingCancellation)
-            {
-                runtime.Phase = CoordinatorPhase.Start;
-                return current;
-            }
-
-            runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(
-                runtime,
-                current,
-                DelegationState.Failed,
-                "Provider start receipt validation failed.",
-                [],
-                cancellationToken).ConfigureAwait(false);
+            runtime.InFlightProviderCall = null;
         }
     }
 
@@ -1209,152 +1326,204 @@ internal sealed class InMemoryDelegationCoordinator
                 cancellationToken).ConfigureAwait(false);
         }
 
-        ExternalOperationObservation observation;
+        if (runtime.InFlightProviderCall == current.Progress.Revision)
+        {
+            // Another pump reserved this revision for provider I/O and has not
+            // settled it. Wait instead of observing twice.
+            return current;
+        }
+
+        var reservedRevision = current.Progress.Revision;
+        runtime.InFlightProviderCall = reservedRevision;
         try
         {
-            observation = await runtime.Adapter!.ObserveAsync(runtime.Handle, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (ExternalOperationProviderException exception)
-        {
+            ExternalOperationObservation observation;
+            try
+            {
+                observation = await CallProviderOutsideGateAsync(
+                    runtime,
+                    providerToken => runtime.Adapter!.ObserveAsync(runtime.Handle!, providerToken)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (ExternalOperationProviderException exception)
+            {
+                if (pendingCancellation)
+                {
+                    runtime.Phase = CoordinatorPhase.Observe;
+                    return await publisher.PublishRunningAsync(
+                        runtime,
+                        current,
+                        workerCalls: checked(current.Progress.WorkerCalls + 1),
+                        retries: current.Progress.Retries,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                if (exception.Failure.Retryable)
+                {
+                    return await RetryTransportAsync(runtime, current, CoordinatorPhase.Observe,
+                        RetryableFailureSummary("observation", exception.Failure), cancellationToken).ConfigureAwait(false);
+                }
+
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
+                    ClassifiedFailureSummary("observation", exception.Failure), [], cancellationToken,
+                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+            }
+            catch
+            {
+                if (pendingCancellation)
+                {
+                    runtime.Phase = CoordinatorPhase.Observe;
+                    return await publisher.PublishRunningAsync(
+                        runtime,
+                        current,
+                        workerCalls: checked(current.Progress.WorkerCalls + 1),
+                        retries: current.Progress.Retries,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
+                    UnclassifiedFailureSummary("observation"), [], cancellationToken,
+                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+            }
+
+            // Refresh under the same fence: cancellation may have been recorded
+            // while the observation was pending, and another pump may have moved
+            // the store meanwhile.
+            pendingCancellation = IsCancellationPending(runtime);
+            var supersededObservation = await ReconcileProviderReturnAsync(
+                runtime.DelegationId, reservedRevision, cancellationToken).ConfigureAwait(false);
+            if (supersededObservation is not null)
+            {
+                return supersededObservation;
+            }
+
+            try
+            {
+                ArgumentNullException.ThrowIfNull(observation);
+                if (observation.Handle != runtime.Handle)
+                {
+                    throw new InvalidOperationException("The provider observation returned a different external handle.");
+                }
+
+                if (runtime.LastObservation is not null)
+                {
+                    ExternalOperationObservationRules.ValidateProgression(runtime.LastObservation, observation);
+                }
+
+                runtime.LastObservation = observation;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Failed,
+                    "Provider observation validation failed.",
+                    [],
+                    cancellationToken,
+                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+            }
+
+            if (observation.State is ExternalOperationState.Failed
+                or ExternalOperationState.TimedOut
+                or ExternalOperationState.Rejected
+                or ExternalOperationState.Cancelled)
+            {
+                runtime.Phase = CoordinatorPhase.Complete;
+                var state = observation.State == ExternalOperationState.Cancelled
+                    ? DelegationState.Cancelled
+                    : DelegationState.Failed;
+                var summary = ProviderTerminalSummary("observation", observation.State, observation.Failure);
+                return await publisher.PublishTerminalAsync(runtime, current, state, summary, [], cancellationToken, current.Progress.WorkerCalls + 1)
+                    .ConfigureAwait(false);
+            }
+
+            if (!pendingCancellation
+                && observation.State == ExternalOperationState.Unknown
+                && observation.Failure is { Retryable: false })
+            {
+                // The provider reported an ambiguous state that will not be
+                // retried. Observing again cannot resolve it, so escalate to
+                // the host instead of spending the worker-call budget on
+                // no-op observations that end as an unrelated BudgetExceeded.
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.NeedsSupervisor,
+                    "The provider reported an ambiguous state with a non-retryable error; supervisory authority is required to resolve the outcome.",
+                    [],
+                    cancellationToken,
+                    current.Progress.WorkerCalls + 1,
+                    unresolvedConcerns:
+                    [
+                        $"Provider observation reported state 'Unknown' with non-retryable code '{observation.Failure.Code}'.",
+                    ]).ConfigureAwait(false);
+            }
+
             if (pendingCancellation)
             {
-                runtime.Phase = CoordinatorPhase.Observe;
-                return await publisher.PublishRunningAsync(
+                // A rejected, unknown, or merely requested cancellation is not a
+                // terminal coordinator outcome. Once observation reaches a
+                // provider terminal state, however, that observed state is the
+                // source of truth and must be allowed to complete normally. In
+                // particular, Succeeded must proceed to result retrieval instead
+                // of replaying the cancellation request forever.
+                if (observation.State == ExternalOperationState.Succeeded)
+                {
+                    runtime.CancellationReconciled = true;
+                    runtime.Phase = CoordinatorPhase.GetResult;
+                    return await publisher.PublishRunningAsync(
+                        runtime,
+                        current,
+                        workerCalls: current.Progress.WorkerCalls + 1,
+                        retries: current.Progress.Retries,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                var observed = await publisher.PublishRunningAsync(
                     runtime,
                     current,
                     workerCalls: checked(current.Progress.WorkerCalls + 1),
                     retries: current.Progress.Retries,
                     cancellationToken).ConfigureAwait(false);
+                return await CancelKnownHandleAsync(runtime, observed, cancellationToken).ConfigureAwait(false);
             }
 
-            if (exception.Failure.Retryable)
-            {
-                return await RetryTransportAsync(runtime, current, CoordinatorPhase.Observe,
-                    RetryableFailureSummary("observation", exception.Failure), cancellationToken).ConfigureAwait(false);
-            }
-
-            runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
-                ClassifiedFailureSummary("observation", exception.Failure), [], cancellationToken,
-                current.Progress.WorkerCalls + 1).ConfigureAwait(false);
-        }
-        catch
-        {
-            if (pendingCancellation)
+            runtime.Phase = observation.ResultAvailable || observation.State == ExternalOperationState.Succeeded
+                ? CoordinatorPhase.GetResult
+                : CoordinatorPhase.Observe;
+            if (observation.State == ExternalOperationState.Waiting)
             {
                 runtime.Phase = CoordinatorPhase.Observe;
-                return await publisher.PublishRunningAsync(
+                return await publisher.PublishWaitingAsync(
                     runtime,
                     current,
-                    workerCalls: checked(current.Progress.WorkerCalls + 1),
-                    retries: current.Progress.Retries,
+                    observation,
                     cancellationToken).ConfigureAwait(false);
             }
 
-            runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
-                UnclassifiedFailureSummary("observation"), [], cancellationToken,
-                current.Progress.WorkerCalls + 1).ConfigureAwait(false);
-        }
-
-        try
-        {
-            ArgumentNullException.ThrowIfNull(observation);
-            if (observation.Handle != runtime.Handle)
-            {
-                throw new InvalidOperationException("The provider observation returned a different external handle.");
-            }
-
-            if (runtime.LastObservation is not null)
-            {
-                ExternalOperationObservationRules.ValidateProgression(runtime.LastObservation, observation);
-            }
-
-            runtime.LastObservation = observation;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(
+            return await publisher.PublishRunningAsync(
                 runtime,
                 current,
-                DelegationState.Failed,
-                "Provider observation validation failed.",
-                [],
-                cancellationToken,
-                current.Progress.WorkerCalls + 1).ConfigureAwait(false);
-        }
-
-        if (observation.State is ExternalOperationState.Failed
-            or ExternalOperationState.TimedOut
-            or ExternalOperationState.Rejected
-            or ExternalOperationState.Cancelled)
-        {
-            runtime.Phase = CoordinatorPhase.Complete;
-            var state = observation.State == ExternalOperationState.Cancelled
-                ? DelegationState.Cancelled
-                : DelegationState.Failed;
-            var summary = ProviderTerminalSummary("observation", observation.State, observation.Failure);
-            return await publisher.PublishTerminalAsync(runtime, current, state, summary, [], cancellationToken, current.Progress.WorkerCalls + 1)
-                .ConfigureAwait(false);
-        }
-
-        if (pendingCancellation)
-        {
-            // A rejected, unknown, or merely requested cancellation is not a
-            // terminal coordinator outcome. Once observation reaches a
-            // provider terminal state, however, that observed state is the
-            // source of truth and must be allowed to complete normally. In
-            // particular, Succeeded must proceed to result retrieval instead
-            // of replaying the cancellation request forever.
-            if (observation.State == ExternalOperationState.Succeeded)
-            {
-                runtime.CancellationReconciled = true;
-                runtime.Phase = CoordinatorPhase.GetResult;
-                return await publisher.PublishRunningAsync(
-                    runtime,
-                    current,
-                    workerCalls: current.Progress.WorkerCalls + 1,
-                    retries: current.Progress.Retries,
-                    cancellationToken).ConfigureAwait(false);
-            }
-
-            var observed = await publisher.PublishRunningAsync(
-                runtime,
-                current,
-                workerCalls: checked(current.Progress.WorkerCalls + 1),
+                workerCalls: current.Progress.WorkerCalls + 1,
                 retries: current.Progress.Retries,
                 cancellationToken).ConfigureAwait(false);
-            return await CancelKnownHandleAsync(runtime, observed, cancellationToken).ConfigureAwait(false);
         }
-
-        runtime.Phase = observation.ResultAvailable || observation.State == ExternalOperationState.Succeeded
-            ? CoordinatorPhase.GetResult
-            : CoordinatorPhase.Observe;
-        if (observation.State == ExternalOperationState.Waiting)
+        finally
         {
-            runtime.Phase = CoordinatorPhase.Observe;
-            return await publisher.PublishWaitingAsync(
-                runtime,
-                current,
-                observation,
-                cancellationToken).ConfigureAwait(false);
+            runtime.InFlightProviderCall = null;
         }
-
-        return await publisher.PublishRunningAsync(
-            runtime,
-            current,
-            workerCalls: current.Progress.WorkerCalls + 1,
-            retries: current.Progress.Retries,
-            cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask<DelegationExecutionSnapshot> PumpResultAsync(
@@ -1389,213 +1558,242 @@ internal sealed class InMemoryDelegationCoordinator
                 cancellationToken).ConfigureAwait(false);
         }
 
-        ExternalOperationResult result;
-        runtime.ResultRetrievalStarted = true;
+        if (runtime.InFlightProviderCall == current.Progress.Revision)
+        {
+            // Another pump reserved this revision for provider I/O and has not
+            // settled it. Wait instead of retrieving twice.
+            return current;
+        }
+
+        var reservedRevision = current.Progress.Revision;
+        runtime.InFlightProviderCall = reservedRevision;
         try
         {
-            result = await runtime.Adapter!.GetResultAsync(runtime.Handle, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (ExternalOperationProviderException exception)
-        {
-            if (exception.Failure.Retryable)
+            ExternalOperationResult result;
+            runtime.ResultRetrievalStarted = true;
+            try
             {
-                return await RetryTransportAsync(runtime, current, CoordinatorPhase.GetResult,
-                    RetryableFailureSummary("result", exception.Failure), cancellationToken).ConfigureAwait(false);
+                result = await CallProviderOutsideGateAsync(
+                    runtime,
+                    providerToken => runtime.Adapter!.GetResultAsync(runtime.Handle!, providerToken)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (ExternalOperationProviderException exception)
+            {
+                if (exception.Failure.Retryable)
+                {
+                    return await RetryTransportAsync(runtime, current, CoordinatorPhase.GetResult,
+                        RetryableFailureSummary("result", exception.Failure), cancellationToken).ConfigureAwait(false);
+                }
+
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
+                    ClassifiedFailureSummary("result", exception.Failure), [], cancellationToken,
+                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+            }
+            catch
+            {
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
+                    UnclassifiedFailureSummary("result"), [], cancellationToken,
+                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+            }
+
+            // Reconcile under the same fence: a terminal store or any revision
+            // movement discards this late result instead of overwriting newer
+            // state. Confirmed provider results stay authoritative here; a
+            // recorded cancellation does not rewrite them.
+            var supersededResult = await ReconcileProviderReturnAsync(
+                runtime.DelegationId, reservedRevision, cancellationToken).ConfigureAwait(false);
+            if (supersededResult is not null)
+            {
+                return supersededResult;
+            }
+
+            try
+            {
+                ArgumentNullException.ThrowIfNull(result);
+                if (result.Handle != runtime.Handle)
+                {
+                    throw new InvalidOperationException("The provider result returned a different external handle.");
+                }
+
+                if (runtime.LastObservation is { State: ExternalOperationState.Succeeded }
+                    && result.State != ExternalOperationState.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        "A succeeded external observation cannot produce a non-succeeded result.");
+                }
+
+                if (runtime.LastObservation is not null
+                    && result.CompletedAt < runtime.LastObservation.ObservedAt)
+                {
+                    throw new InvalidOperationException(
+                        "An external result cannot precede its last observation timestamp.");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(
+                    runtime,
+                    current,
+                    DelegationState.Failed,
+                    "Provider result validation failed.",
+                    [],
+                    cancellationToken,
+                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+            }
+
+            if (result.State == ExternalOperationState.Succeeded
+                && (candidateValidator is not null || candidateReviewer is not null))
+            {
+                if (runtime.CorrectionStarted
+                    && runtime.Candidate is { Revision: > 1 })
+                {
+                    // A post-cancellation reconciliation may retrieve the
+                    // provider's original result again. Preserve the already
+                    // published corrected candidate and only re-enter its evaluator.
+                    runtime.Phase = CoordinatorPhase.Evaluate;
+                    return current;
+                }
+
+                if (result.Candidate is null)
+                {
+                    runtime.Phase = CoordinatorPhase.Complete;
+                    return await publisher.PublishTerminalAsync(
+                        runtime,
+                        current,
+                        DelegationState.Failed,
+                        "The successful provider result did not seal a candidate revision.",
+                        result.Artifacts,
+                        cancellationToken,
+                        current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+                }
+
+                try
+                {
+                    if (candidateRegistry is null)
+                    {
+                        throw new InvalidOperationException("Candidate evaluation requires a publication registry.");
+                    }
+
+                    var publication = await candidateRegistry.PublishAsync(result.Candidate, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (!CandidateRevisionIdentity.SemanticallyEqual(publication.Candidate, result.Candidate))
+                    {
+                        throw new InvalidOperationException("The candidate publication registry returned a different candidate content.");
+                    }
+                    runtime.Candidate = publication.Candidate;
+                    runtime.ResultArtifacts = result.Artifacts;
+                    runtime.ValidationInvocationId = $"validation:{runtime.DelegationId.Value:D}:1";
+                    runtime.ReviewInvocationId = $"review:{runtime.DelegationId.Value:D}:1";
+                    runtime.ImplementationInvocation = CreateImplementationInvocation(runtime, publication.Candidate, result);
+
+                    // The hard worker-call budget is a runtime contract: never
+                    // launch evaluators the budget cannot pay for.
+                    var consumedAtResult = DelegationExecutionPublisher.ActualWorkerCalls(runtime, current);
+                    var verificationCalls = CandidateEvaluationRunner.VerificationCallCount(
+                        candidateValidator is not null,
+                        candidateReviewer is not null);
+                    var projectedCalls = checked(consumedAtResult + verificationCalls);
+                    if (projectedCalls > runtime.Request.Budget.MaximumWorkerCalls)
+                    {
+                        runtime.Phase = CoordinatorPhase.Complete;
+                        return await publisher.PublishBudgetExceededAsync(
+                            runtime,
+                            current,
+                            result.Artifacts,
+                            "worker-calls",
+                            runtime.Request.Budget.MaximumWorkerCalls,
+                            consumedAtResult,
+                            projectedCalls - consumedAtResult,
+                            $"The worker-call budget cannot cover deterministic validation and independent review (required {projectedCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
+                            cancellationToken).ConfigureAwait(false);
+                    }
+
+                    runtime.Phase = CoordinatorPhase.Evaluate;
+                    return current;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    runtime.Phase = CoordinatorPhase.Complete;
+                    return await publisher.PublishTerminalAsync(
+                        runtime,
+                        current,
+                        DelegationState.Failed,
+                        "Candidate publication failed coordinator validation.",
+                        result.Artifacts,
+                        cancellationToken,
+                        current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+                }
+            }
+
+            // A candidate without evaluator branches is still sealed and exposed
+            // as immutable terminal evidence when a host supplied a registry.
+            if (result.State == ExternalOperationState.Succeeded && result.Candidate is not null && candidateRegistry is not null)
+            {
+                try
+                {
+                    var publication = await candidateRegistry.PublishAsync(result.Candidate, cancellationToken).ConfigureAwait(false);
+                    if (!CandidateRevisionIdentity.SemanticallyEqual(publication.Candidate, result.Candidate))
+                    {
+                        throw new InvalidOperationException("The candidate publication registry returned a different candidate content.");
+                    }
+
+                    runtime.Candidate = publication.Candidate;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    runtime.Phase = CoordinatorPhase.Complete;
+                    return await publisher.PublishTerminalAsync(
+                        runtime,
+                        current,
+                        DelegationState.Failed,
+                        "Candidate publication failed coordinator validation.",
+                        result.Artifacts,
+                        cancellationToken,
+                        current.Progress.WorkerCalls + 1).ConfigureAwait(false);
+                }
             }
 
             runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
-                ClassifiedFailureSummary("result", exception.Failure), [], cancellationToken,
-                current.Progress.WorkerCalls + 1).ConfigureAwait(false);
-        }
-        catch
-        {
-            runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(runtime, current, DelegationState.Failed,
-                UnclassifiedFailureSummary("result"), [], cancellationToken,
-                current.Progress.WorkerCalls + 1).ConfigureAwait(false);
-        }
-
-        try
-        {
-            ArgumentNullException.ThrowIfNull(result);
-            if (result.Handle != runtime.Handle)
-            {
-                throw new InvalidOperationException("The provider result returned a different external handle.");
-            }
-
-            if (runtime.LastObservation is { State: ExternalOperationState.Succeeded }
-                && result.State != ExternalOperationState.Succeeded)
-            {
-                throw new InvalidOperationException(
-                    "A succeeded external observation cannot produce a non-succeeded result.");
-            }
-
-            if (runtime.LastObservation is not null
-                && result.CompletedAt < runtime.LastObservation.ObservedAt)
-            {
-                throw new InvalidOperationException(
-                    "An external result cannot precede its last observation timestamp.");
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            runtime.Phase = CoordinatorPhase.Complete;
+            var state = result.State == ExternalOperationState.Succeeded
+                ? DelegationState.Completed
+                : result.State == ExternalOperationState.Cancelled
+                    ? DelegationState.Cancelled
+                    : DelegationState.Failed;
+            var summary = result.State == ExternalOperationState.Succeeded
+                ? "The provider completed the operation successfully."
+                : ProviderTerminalSummary("result", result.State, result.Failure);
             return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
-                DelegationState.Failed,
-                "Provider result validation failed.",
-                [],
+                state,
+                summary,
+                result.Artifacts,
                 cancellationToken,
                 current.Progress.WorkerCalls + 1).ConfigureAwait(false);
         }
-
-        if (result.State == ExternalOperationState.Succeeded
-            && (candidateValidator is not null || candidateReviewer is not null))
+        finally
         {
-            if (runtime.CorrectionStarted
-                && runtime.Candidate is { Revision: > 1 })
-            {
-                // A post-cancellation reconciliation may retrieve the
-                // provider's original result again. Preserve the already
-                // published corrected candidate and only re-enter its evaluator.
-                runtime.Phase = CoordinatorPhase.Evaluate;
-                return current;
-            }
-
-            if (result.Candidate is null)
-            {
-                runtime.Phase = CoordinatorPhase.Complete;
-                return await publisher.PublishTerminalAsync(
-                    runtime,
-                    current,
-                    DelegationState.Failed,
-                    "The successful provider result did not seal a candidate revision.",
-                    result.Artifacts,
-                    cancellationToken,
-                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
-            }
-
-            try
-            {
-                if (candidateRegistry is null)
-                {
-                    throw new InvalidOperationException("Candidate evaluation requires a publication registry.");
-                }
-
-                var publication = await candidateRegistry.PublishAsync(result.Candidate, cancellationToken)
-                    .ConfigureAwait(false);
-                if (!CandidateRevisionIdentity.SemanticallyEqual(publication.Candidate, result.Candidate))
-                {
-                    throw new InvalidOperationException("The candidate publication registry returned a different candidate content.");
-                }
-                runtime.Candidate = publication.Candidate;
-                runtime.ResultArtifacts = result.Artifacts;
-                runtime.ValidationInvocationId = $"validation:{runtime.DelegationId.Value:D}:1";
-                runtime.ReviewInvocationId = $"review:{runtime.DelegationId.Value:D}:1";
-                runtime.ImplementationInvocation = CreateImplementationInvocation(runtime, publication.Candidate, result);
-
-                // The hard worker-call budget is a runtime contract: never
-                // launch evaluators the budget cannot pay for.
-                var consumedAtResult = DelegationExecutionPublisher.ActualWorkerCalls(runtime, current);
-                var verificationCalls = CandidateEvaluationRunner.VerificationCallCount(
-                    candidateValidator is not null,
-                    candidateReviewer is not null);
-                var projectedCalls = checked(consumedAtResult + verificationCalls);
-                if (projectedCalls > runtime.Request.Budget.MaximumWorkerCalls)
-                {
-                    runtime.Phase = CoordinatorPhase.Complete;
-                    return await publisher.PublishBudgetExceededAsync(
-                        runtime,
-                        current,
-                        result.Artifacts,
-                        "worker-calls",
-                        runtime.Request.Budget.MaximumWorkerCalls,
-                        consumedAtResult,
-                        projectedCalls - consumedAtResult,
-                        $"The worker-call budget cannot cover deterministic validation and independent review (required {projectedCalls}, limit {runtime.Request.Budget.MaximumWorkerCalls}).",
-                        cancellationToken).ConfigureAwait(false);
-                }
-
-                runtime.Phase = CoordinatorPhase.Evaluate;
-                return current;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch
-            {
-                runtime.Phase = CoordinatorPhase.Complete;
-                return await publisher.PublishTerminalAsync(
-                    runtime,
-                    current,
-                    DelegationState.Failed,
-                    "Candidate publication failed coordinator validation.",
-                    result.Artifacts,
-                    cancellationToken,
-                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
-            }
+            runtime.InFlightProviderCall = null;
         }
-
-        // A candidate without evaluator branches is still sealed and exposed
-        // as immutable terminal evidence when a host supplied a registry.
-        if (result.State == ExternalOperationState.Succeeded && result.Candidate is not null && candidateRegistry is not null)
-        {
-            try
-            {
-                var publication = await candidateRegistry.PublishAsync(result.Candidate, cancellationToken).ConfigureAwait(false);
-                if (!CandidateRevisionIdentity.SemanticallyEqual(publication.Candidate, result.Candidate))
-                {
-                    throw new InvalidOperationException("The candidate publication registry returned a different candidate content.");
-                }
-
-                runtime.Candidate = publication.Candidate;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch
-            {
-                runtime.Phase = CoordinatorPhase.Complete;
-                return await publisher.PublishTerminalAsync(
-                    runtime,
-                    current,
-                    DelegationState.Failed,
-                    "Candidate publication failed coordinator validation.",
-                    result.Artifacts,
-                    cancellationToken,
-                    current.Progress.WorkerCalls + 1).ConfigureAwait(false);
-            }
-        }
-
-        runtime.Phase = CoordinatorPhase.Complete;
-        var state = result.State == ExternalOperationState.Succeeded
-            ? DelegationState.Completed
-            : result.State == ExternalOperationState.Cancelled
-                ? DelegationState.Cancelled
-                : DelegationState.Failed;
-        var summary = result.State == ExternalOperationState.Succeeded
-            ? "The provider completed the operation successfully."
-            : ProviderTerminalSummary("result", result.State, result.Failure);
-        return await publisher.PublishTerminalAsync(
-            runtime,
-            current,
-            state,
-            summary,
-            result.Artifacts,
-            cancellationToken,
-            current.Progress.WorkerCalls + 1).ConfigureAwait(false);
     }
 
 
@@ -1706,59 +1904,82 @@ internal sealed class InMemoryDelegationCoordinator
             current.Progress.Retries,
             cancellationToken).ConfigureAwait(false);
 
-        ExternalOperationCancellationReceipt receipt;
+        // Cancellation intent was already recorded by the caller; this marker
+        // only fences concurrent pumps, it never blocks the cancel itself.
+        var reservedRevision = current.Progress.Revision;
+        runtime.InFlightProviderCall = reservedRevision;
         try
         {
-            receipt = await runtime.Adapter!.CancelAsync(
-            new ExternalOperationCancelRequest(
-                runtime.Handle!,
-                    runtime.CancellationRequest!.CancellationKey,
-                    runtime.CancellationRequest.Reason),
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (ExternalOperationProviderException)
-        {
-            // Cancellation failures are non-terminal: the coordinator must
-            // continue observing the same handle. The provider exception is
-            // deliberately not copied into durable result text.
-            runtime.Phase = CoordinatorPhase.Observe;
-            return current;
-        }
-        catch
-        {
-            runtime.Phase = CoordinatorPhase.Observe;
-            return current;
-        }
-
-        try
-        {
-            ArgumentNullException.ThrowIfNull(receipt);
-            if (receipt.Handle != runtime.Handle
-                || !string.Equals(
-                    receipt.CancellationKey,
-                    runtime.CancellationRequest.CancellationKey,
-                    StringComparison.Ordinal))
+            ExternalOperationCancellationReceipt receipt;
+            try
             {
-                throw new InvalidOperationException("The provider cancellation receipt did not match the exact request.");
+                receipt = await CallProviderOutsideGateAsync(
+                    runtime,
+                    providerToken => runtime.Adapter!.CancelAsync(
+                    new ExternalOperationCancelRequest(
+                        runtime.Handle!,
+                            runtime.CancellationRequest!.CancellationKey,
+                            runtime.CancellationRequest.Reason),
+                        providerToken)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (ExternalOperationProviderException)
+            {
+                // Cancellation failures are non-terminal: the coordinator must
+                // continue observing the same handle. The provider exception is
+                // deliberately not copied into durable result text.
+                runtime.Phase = CoordinatorPhase.Observe;
+                return current;
+            }
+            catch
+            {
+                runtime.Phase = CoordinatorPhase.Observe;
+                return current;
             }
 
-            runtime.CancellationReceipt = receipt;
-        }
-        catch
-        {
-            runtime.Phase = CoordinatorPhase.Observe;
-            return current;
-        }
+            // Reconcile under the same fence: a terminal store or any revision
+            // movement discards this late receipt instead of overwriting newer
+            // state.
+            var supersededCancel = await ReconcileProviderReturnAsync(
+                runtime.DelegationId, reservedRevision, cancellationToken).ConfigureAwait(false);
+            if (supersededCancel is not null)
+            {
+                return supersededCancel;
+            }
 
-        return await ReconcileCancellationReceiptAsync(
-            runtime,
-            current,
-            receipt,
-            cancellationToken).ConfigureAwait(false);
+            try
+            {
+                ArgumentNullException.ThrowIfNull(receipt);
+                if (receipt.Handle != runtime.Handle
+                    || !string.Equals(
+                        receipt.CancellationKey,
+                        runtime.CancellationRequest.CancellationKey,
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("The provider cancellation receipt did not match the exact request.");
+                }
+
+                runtime.CancellationReceipt = receipt;
+            }
+            catch
+            {
+                runtime.Phase = CoordinatorPhase.Observe;
+                return current;
+            }
+
+            return await ReconcileCancellationReceiptAsync(
+                runtime,
+                current,
+                receipt,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            runtime.InFlightProviderCall = null;
+        }
     }
 
     private async ValueTask<DelegationExecutionSnapshot> ReconcileCancellationReceiptAsync(
@@ -1828,102 +2049,130 @@ internal sealed class InMemoryDelegationCoordinator
             return current;
         }
 
+        if (runtime.InFlightProviderCall == current.Progress.Revision)
+        {
+            // Another pump reserved this revision for provider I/O and has not
+            // settled it. Wait instead of resuming twice.
+            return current;
+        }
+
         var previousHandle = runtime.ResumePreviousHandle ?? runtime.Handle!;
-        ExternalOperationResumeReceipt receipt;
+        var reservedRevision = current.Progress.Revision;
+        runtime.InFlightProviderCall = reservedRevision;
         try
         {
-            receipt = await runtime.Adapter!.ResumeAsync(
-                runtime.ResumeRequest!,
-                new ResumeHandleCaptureSink(this, runtime, previousHandle),
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch
-        {
-            // A lost resume response is ambiguous.  If the provider captured
-            // a new handle first, that capture is durable acceptance evidence
-            // and the next exact replay must observe it instead of calling
-            // ResumeAsync again.  With no rotated capture, a bounded retry is
-            // still allowed and consumes the normal resume budgets.
-            if (runtime.ResumePreviousHandle is not null
-                && runtime.Handle != runtime.ResumePreviousHandle)
+            ExternalOperationResumeReceipt receipt;
+            try
             {
-                runtime.ResumeAcceptedAmbiguity = true;
+                receipt = await CallProviderOutsideGateAsync(
+                    runtime,
+                    providerToken => runtime.Adapter!.ResumeAsync(
+                        runtime.ResumeRequest!,
+                        new ResumeHandleCaptureSink(this, runtime, previousHandle),
+                        providerToken)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // A lost resume response is ambiguous.  If the provider captured
+                // a new handle first, that capture is durable acceptance evidence
+                // and the next exact replay must observe it instead of calling
+                // ResumeAsync again.  With no rotated capture, a bounded retry is
+                // still allowed and consumes the normal resume budgets.
+                if (runtime.ResumePreviousHandle is not null
+                    && runtime.Handle != runtime.ResumePreviousHandle)
+                {
+                    runtime.ResumeAcceptedAmbiguity = true;
+                    runtime.ResumeAmbiguityObserved = false;
+                }
+
+                runtime.Phase = CoordinatorPhase.Observe;
+                return current;
+            }
+
+            // Reconcile under the same fence: a terminal store or any revision
+            // movement discards this late receipt instead of overwriting newer
+            // state.
+            var supersededResume = await ReconcileProviderReturnAsync(
+                runtime.DelegationId, reservedRevision, cancellationToken).ConfigureAwait(false);
+            if (supersededResume is not null)
+            {
+                return supersededResume;
+            }
+
+            try
+            {
+                ArgumentNullException.ThrowIfNull(receipt);
+                if (receipt.PreviousHandle != previousHandle
+                    || !string.Equals(receipt.ResumeKey, runtime.ResumeRequest!.ResumeKey, StringComparison.Ordinal)
+                    || ExternalOperationExecutionKey.Create(receipt.Handle.Correlation)
+                        != ExternalOperationExecutionKey.Create(runtime.Correlation))
+                {
+                    throw new InvalidOperationException("The provider resume receipt did not match the exact request.");
+                }
+
+                var rotated = runtime.Handle != receipt.Handle;
+                if (rotated)
+                {
+                    await handleRegistry.RotateAsync(
+                        runtime.Handle!,
+                        new ExternalOperationHandleCapture(receipt.Handle, receipt.AcceptedAt),
+                        cancellationToken).ConfigureAwait(false);
+                    runtime.Handle = receipt.Handle;
+                }
+
+                runtime.ResumeReceipt = receipt;
+                runtime.ResumeAcceptedAmbiguity = false;
                 runtime.ResumeAmbiguityObserved = false;
+                if (rotated)
+                {
+                    runtime.LastObservation = null;
+                }
+            }
+            catch
+            {
+                if (runtime.ResumePreviousHandle is not null
+                    && runtime.Handle != runtime.ResumePreviousHandle)
+                {
+                    runtime.ResumeAcceptedAmbiguity = true;
+                    runtime.ResumeAmbiguityObserved = false;
+                }
+
+                runtime.Phase = CoordinatorPhase.Observe;
+                return current;
             }
 
-            runtime.Phase = CoordinatorPhase.Observe;
-            return current;
-        }
-
-        try
-        {
-            ArgumentNullException.ThrowIfNull(receipt);
-            if (receipt.PreviousHandle != previousHandle
-                || !string.Equals(receipt.ResumeKey, runtime.ResumeRequest!.ResumeKey, StringComparison.Ordinal)
-                || ExternalOperationExecutionKey.Create(receipt.Handle.Correlation)
-                    != ExternalOperationExecutionKey.Create(runtime.Correlation))
+            runtime.Phase = receipt.State == ExternalOperationState.Succeeded
+                ? CoordinatorPhase.GetResult
+                : CoordinatorPhase.Observe;
+            if (receipt.State is ExternalOperationState.Cancelled
+                or ExternalOperationState.Failed
+                or ExternalOperationState.TimedOut
+                or ExternalOperationState.Rejected)
             {
-                throw new InvalidOperationException("The provider resume receipt did not match the exact request.");
-            }
-
-            var rotated = runtime.Handle != receipt.Handle;
-            if (rotated)
-            {
-                await handleRegistry.RotateAsync(
-                    runtime.Handle!,
-                    new ExternalOperationHandleCapture(receipt.Handle, receipt.AcceptedAt),
+                runtime.Phase = CoordinatorPhase.Complete;
+                return await publisher.PublishTerminalAsync(
+                    runtime,
+                    current,
+                    receipt.State == ExternalOperationState.Cancelled
+                        ? DelegationState.Cancelled
+                        : DelegationState.Failed,
+                    receipt.State == ExternalOperationState.Cancelled
+                        ? "The provider reported the resumed operation was cancelled."
+                        : "The provider reported the resumed operation was terminal.",
+                    [],
                     cancellationToken).ConfigureAwait(false);
-                runtime.Handle = receipt.Handle;
             }
 
-            runtime.ResumeReceipt = receipt;
-            runtime.ResumeAcceptedAmbiguity = false;
-            runtime.ResumeAmbiguityObserved = false;
-            if (rotated)
-            {
-                runtime.LastObservation = null;
-            }
-        }
-        catch
-        {
-            if (runtime.ResumePreviousHandle is not null
-                && runtime.Handle != runtime.ResumePreviousHandle)
-            {
-                runtime.ResumeAcceptedAmbiguity = true;
-                runtime.ResumeAmbiguityObserved = false;
-            }
-
-            runtime.Phase = CoordinatorPhase.Observe;
             return current;
         }
-
-        runtime.Phase = receipt.State == ExternalOperationState.Succeeded
-            ? CoordinatorPhase.GetResult
-            : CoordinatorPhase.Observe;
-        if (receipt.State is ExternalOperationState.Cancelled
-            or ExternalOperationState.Failed
-            or ExternalOperationState.TimedOut
-            or ExternalOperationState.Rejected)
+        finally
         {
-            runtime.Phase = CoordinatorPhase.Complete;
-            return await publisher.PublishTerminalAsync(
-                runtime,
-                current,
-                receipt.State == ExternalOperationState.Cancelled
-                    ? DelegationState.Cancelled
-                    : DelegationState.Failed,
-                receipt.State == ExternalOperationState.Cancelled
-                    ? "The provider reported the resumed operation was cancelled."
-                    : "The provider reported the resumed operation was terminal.",
-                [],
-                cancellationToken).ConfigureAwait(false);
+            runtime.InFlightProviderCall = null;
         }
-
-        return current;
     }
 
 
@@ -2155,7 +2404,8 @@ internal sealed class InMemoryDelegationCoordinator
             IExternalOperationProvider? adapter,
             string? providerFailure,
             IExternalOperationSemanticFingerprintVerifier fingerprintVerifier,
-            DateTimeOffset acceptedAt)
+            DateTimeOffset acceptedAt,
+            MaterializedDelegationInputs? materialized = null)
         {
             DelegationId = delegationId;
             Request = request;
@@ -2168,10 +2418,22 @@ internal sealed class InMemoryDelegationCoordinator
 
             if (provider is not null)
             {
-                var agent = new ExternalAgentReference(
-                    provider.Provider,
-                    provider.Provider,
-                    AgentProtocolVersion);
+                // The trusted agent record comes from host materialization;
+                // without it the legacy provider-name-derived record applies.
+                // Either way the exact record is fingerprinted into the start
+                // identity, and a materialized agent for another provider is
+                // refused before any launch.
+                var agent = materialized?.Agent
+                    ?? new ExternalAgentReference(
+                        provider.Provider,
+                        provider.Provider,
+                        AgentProtocolVersion);
+                if (!string.Equals(agent.Provider, provider.Provider, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "The materialized agent must belong to the resolved provider.");
+                }
+
                 Correlation = new ExternalOperationCorrelation(
                     delegationId,
                     new WorkflowRunExecutionReference(
@@ -2186,9 +2448,9 @@ internal sealed class InMemoryDelegationCoordinator
                     delegationId,
                     agent,
                     AgentCapability,
-                    [],
-                    null,
-                    null);
+                    materialized?.InputArtifacts ?? [],
+                    materialized?.Budget,
+                    materialized?.Deadline);
                 StartIdentity = new ExternalOperationStartIdentity(
                     delegationId,
                     Correlation.WorkflowRun,
@@ -2201,7 +2463,10 @@ internal sealed class InMemoryDelegationCoordinator
                     StartIdentity,
                     Correlation,
                     AgentCapability,
-                    []);
+                    materialized?.InputArtifacts ?? [],
+                    materialized?.Budget,
+                    materialized?.Deadline);
+                StartRequest.VerifySemanticFingerprint(fingerprintVerifier);
                 StartRequest.VerifySemanticFingerprint(fingerprintVerifier);
             }
             else
@@ -2221,6 +2486,14 @@ internal sealed class InMemoryDelegationCoordinator
         internal ExternalOperationStartIdentity? StartIdentity { get; }
         internal ExternalOperationStartRequest? StartRequest { get; }
         internal ExternalOperationHandle? Handle { get; set; }
+
+        /// <summary>
+        /// Gets the store revision reserved for in-flight provider I/O, if
+        /// any. A second pump at the same revision waits instead of launching
+        /// duplicate provider work; duration and budget checks always run
+        /// first so bounds stay observable through a stalled call.
+        /// </summary>
+        internal long? InFlightProviderCall { get; set; }
         internal ExternalOperationObservation? LastObservation { get; set; }
         internal SupervisorCheckpointId? CheckpointId { get; set; }
         internal WakeHint? WakeHint { get; set; }

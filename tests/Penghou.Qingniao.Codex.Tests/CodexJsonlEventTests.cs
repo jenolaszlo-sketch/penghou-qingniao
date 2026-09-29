@@ -4,8 +4,9 @@ namespace Penghou.Qingniao.Codex.Tests;
 
 /// <summary>
 /// Parser unit tests over observed `codex exec --json` shapes, including the
-/// verbatim recorded probe output. Success-content shapes are deliberately
-/// not asserted: they are unproven until a live run records them.
+/// verbatim recorded probe output. Turn-completion and usage shapes follow the
+/// 2026-09-26 live observations (see docs/codex-protocol-support.md); the
+/// full CLI schema remains unverified, so parsing stays tolerant.
 /// </summary>
 public sealed class CodexJsonlEventTests
 {
@@ -68,5 +69,40 @@ public sealed class CodexJsonlEventTests
         var parsed = Assert.IsType<CodexJsonlEvent.Unknown>(CodexJsonlEvent.TryParse(
             """{"hello":"world"}"""));
         parsed.Type.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Turn_completed_with_nested_usage_parses()
+    {
+        var parsed = Assert.IsType<CodexJsonlEvent.TurnCompleted>(CodexJsonlEvent.TryParse(
+            """{"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":30,"output_tokens":45}}"""));
+        parsed.Usage.Should().NotBeNull();
+        parsed.Usage!.InputTokens.Should().Be(120);
+        parsed.Usage.CachedInputTokens.Should().Be(30);
+        parsed.Usage.OutputTokens.Should().Be(45);
+    }
+
+    [Fact]
+    public void Turn_completed_accepts_flat_usage_and_partial_shapes()
+    {
+        var flat = Assert.IsType<CodexJsonlEvent.TurnCompleted>(CodexJsonlEvent.TryParse(
+            """{"type":"turn.completed","input_tokens":7,"output_tokens":3}"""));
+        flat.Usage.Should().Be(new CodexJsonlEvent.CodexUsage(7, null, 3));
+
+        var bare = Assert.IsType<CodexJsonlEvent.TurnCompleted>(CodexJsonlEvent.TryParse(
+            """{"type":"turn.completed"}"""));
+        bare.Usage.Should().BeNull();
+    }
+
+    [Fact]
+    public void Turn_completed_keeps_malformed_usage_unknown()
+    {
+        var text = Assert.IsType<CodexJsonlEvent.TurnCompleted>(CodexJsonlEvent.TryParse(
+            """{"type":"turn.completed","usage":{"input_tokens":"many"}}"""));
+        text.Usage.Should().BeNull();
+
+        var negative = Assert.IsType<CodexJsonlEvent.TurnCompleted>(CodexJsonlEvent.TryParse(
+            """{"type":"turn.completed","usage":{"input_tokens":-1}}"""));
+        negative.Usage.Should().BeNull();
     }
 }

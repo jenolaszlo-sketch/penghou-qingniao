@@ -43,7 +43,7 @@ Both packages target .NET 8 and .NET 10.
 | --- | --- |
 | `Penghou.Qingniao.Abstractions` | Stable identities, requests, lifecycle, budgets, capabilities, supervision, artifacts, evidence, and provider contracts |
 | `Penghou.Qingniao` | Validation, canonical semantic identity, provider resolution, in-memory execution proof, lifecycle policy, and supervision behavior |
-| `Penghou.Qingniao.Codex` | Process-isolated Codex CLI execution adapter (not yet published; live execution proof pending) |
+| `Penghou.Qingniao.Codex` | Process-isolated Codex CLI execution adapter (not yet published; live execution proof recorded 2026-09-26 on codex-cli 0.157.0; repeatable protocol/recovery coverage remains open per QH-06) |
 
 The abstractions intentionally contain no MVC, HTTP, MCP, authentication,
 tenant, filesystem, Fuwen, Zhinu, Baize, or Marang types. Hosts adapt those
@@ -94,8 +94,8 @@ silently resumes terminal work.
 
 ## Provider and evidence boundary
 
-Providers are selected by semantic capability rather than vendor or model
-name. A provider may run an external agent, local process, Baize route, test
+Providers are resolved to one exact authorized provider by semantic capability rather than vendor or model
+name. The host selects the provider; Qingniao does not rank or reselect. A provider may run an external agent, local process, Baize route, test
 runner, build, diff, or static analysis. It returns normalized handles,
 observations, receipts, artifacts, and terminal evidence.
 
@@ -107,7 +107,7 @@ The coordinator distinguishes:
 - deterministic test outcomes from model-authored review;
 - candidate publication from evaluation and correction.
 
-The built-in Implement proof follows this bounded shape:
+The Implement candidate/test/review shape below is now owned by Marang as its sole preset graph; Qingniao only coordinates the delegation lifecycle for it:
 
 ```text
 execute -> sealed candidate N
@@ -150,12 +150,12 @@ cancellation, waiting and resume, bounded supervisor context, revision-fenced
 interventions, candidate publication, concurrent evaluation, bounded semantic
 correction, budget enforcement, and the terminal outcome matrix.
 
-The coordinator remains internal because it is a semantic proof, not durable
-production infrastructure. The public preview currently exposes the reviewed
-contracts plus reusable validation, identity, registry, fingerprint, provider,
-and policy components.
+The coordinator core remains in-memory process-local proof, not durable
+production infrastructure. Since 0.1.0-preview.2 the public entry point is DelegationRuntime over that coordinator. The preview also exposes the reviewed
+contracts and reusable validation, identity, registry, fingerprint, provider,
+and policy components. In-memory state does not survive restart; persisting one registry alone is not durable execution.
 
-Next milestones add a bounded Codex execution adapter and map the proven
+Next milestones harden the Codex execution adapter (M3 live proof recorded 2026-09-26) and map the proven
 semantics to durable Zhinu execution. Packages are published as previews
 (`0.1.0-preview.2`); consumers should still treat the repository as
 pre-release source.
@@ -167,6 +167,7 @@ See:
 - [Changelog](CHANGELOG.md)
 - [Runnable sample](samples/Penghou.Qingniao.Sample/Program.cs)
 - [Agent execution boundary](docs/agent-execution.md)
+- [Codex CLI protocol support](docs/codex-protocol-support.md)
 - [Protocol boundaries](docs/protocol-boundaries.md)
 - [Security](SECURITY.md)
 - [Extraction decision](docs/decisions/0015-qingniao-extraction-and-marang-service-boundary.md)
@@ -185,3 +186,14 @@ dotnet pack Penghou.Qingniao.slnx --configuration Release --no-build --output ar
 [AGPL-3.0](LICENSE)
 
 Copyright (c) 2026 Jenő Konrád László
+
+## Review findings
+
+[Architecture and boundary review (2026-09-28)](docs/architecture-boundary-review-2026-09-28.md).
+
+[Implementation and model handoff plan](docs/implementation-handoff-plan.md).
+
+## Pending Hufu integration
+
+Penghou.Hufu integration is planned and not implemented. Bind Hufu authority to attenuated delegation and enforce it through provider adapters.
+See [pending work and ownership boundaries](docs/hufu-integration.md).

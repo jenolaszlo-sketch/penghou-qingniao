@@ -53,14 +53,14 @@ Qingniao's direct-delegation contracts and policy components.
 
 ## Gate 2 — Qingniao extraction
 
-Status: **implementation complete; awaiting commit and first preview publication**
+Status: **extraction complete; 0.1.0-preview.1 and 0.1.0-preview.2 published (Codex package not yet published)**
 
 - [x] Rename the reusable projects, namespaces, packages, tests, and API baselines.
 - [x] Prove no dependency on Marang, ASP.NET Core, or MCP.
 - Treat the existing Marang-named preview packages as superseded; do not create
   compatibility shims without a consumer.
-- [ ] Publish `Penghou.Qingniao.Abstractions` and `Penghou.Qingniao`
-  `0.1.0-preview.1` so Marang can remove the transitional duplicate source.
+- [x] Publish `Penghou.Qingniao.Abstractions` and `Penghou.Qingniao`
+  `0.1.0-preview.1`/`0.1.0-preview.2` so Marang can remove the transitional duplicate source (Marang consumes `0.1.0-preview.2`).
 - [x] Consume Siming preview.4 and close the external-start canonical
   fingerprint integration.
 
@@ -79,11 +79,10 @@ Status: **complete for the M2.8 in-memory coordinator proof; durable integration
 - [x] Prove candidate sealing, deterministic Test, independent Review, bounded
   supervision, one repair generation, and terminal-result immutability.
 - Resolve atomic acceptance/state initialization, bounded retained state, and
-  immutable objective input before making the coordinator public.
+  immutable objective input as post-preview.2 hardening (QH-04/QH-05); the DelegationRuntime facade is already public and in-memory-only.
 - Run API, XML, multi-target, package, and isolated-consumer verification.
 
-Publish the first preview after the extraction verification. Marang and
-Guyabano then exercise the package boundary before any stability graduation.
+Marang and Guyabano exercise the package boundary before any stability graduation (first previews already published).
 
 ## Gate 4 — Marang service
 

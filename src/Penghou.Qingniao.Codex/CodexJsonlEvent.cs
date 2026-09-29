@@ -27,6 +27,18 @@ public abstract record CodexJsonlEvent
         }
     }
 
+    /// <summary>
+    /// Parsed token usage for one completed turn. Null members are unknown,
+    /// never zero-filled: absent or non-numeric usage stays unknown.
+    /// </summary>
+    public sealed record CodexUsage(long? InputTokens, long? CachedInputTokens, long? OutputTokens);
+
+    /// <summary>
+    /// A model turn completed. This is the only event that verifies task
+    /// completion: a process exit without one cannot claim success.
+    /// </summary>
+    public sealed record TurnCompleted(CodexUsage? Usage) : CodexJsonlEvent;
+
     /// <summary>A transport-level error event.</summary>
     public sealed record ErrorEvent(string Message) : CodexJsonlEvent;
 
@@ -71,6 +83,7 @@ public abstract record CodexJsonlEvent
                 "thread.started" when root.TryGetProperty("thread_id", out var id)
                     => new ThreadStarted(id.GetString() ?? string.Empty),
                 "turn.started" => TurnStarted.Instance,
+                "turn.completed" => new TurnCompleted(ParseUsage(root)),
                 "error" when root.TryGetProperty("message", out var message)
                     => new ErrorEvent(message.GetString() ?? string.Empty),
                 "turn.failed" when root.TryGetProperty("error", out var error)
@@ -80,6 +93,36 @@ public abstract record CodexJsonlEvent
             };
         }
     }
+
+    private static CodexUsage? ParseUsage(JsonElement root)
+    {
+        // Schema tolerance: usage was observed with input_tokens,
+        // cached_input_tokens and output_tokens, nested in a "usage" object;
+        // flat event-level fields are accepted too. Anything else stays
+        // unknown rather than zero-filled. Full CLI schema versions are
+        // tracked in docs/codex-protocol-support.md.
+        var scope = root;
+        if (root.TryGetProperty("usage", out var nested)
+            && nested.ValueKind == JsonValueKind.Object)
+        {
+            scope = nested;
+        }
+
+        var input = GetOptionalTokens(scope, "input_tokens");
+        var cached = GetOptionalTokens(scope, "cached_input_tokens");
+        var output = GetOptionalTokens(scope, "output_tokens");
+        return input is null && cached is null && output is null
+            ? null
+            : new CodexUsage(input, cached, output);
+    }
+
+    private static long? GetOptionalTokens(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt64(out var number)
+        && number >= 0
+            ? number
+            : null;
 
     private static string Truncate(string value) =>
         value.Length <= 1_024 ? value : value[..1_024];
