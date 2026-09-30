@@ -71,7 +71,8 @@ Qingniao's direct-delegation contracts and policy components.
 
 ## Gate 2 — Qingniao extraction
 
-Status: **extraction complete; 0.1.0-preview.1 and 0.1.0-preview.2 published (Codex package not yet published)**
+Status: **extraction complete; 0.1.0-preview.1 and 0.1.0-preview.2 published;
+0.1.0-preview.3 cut (Codex first publication; publishes on tag push)**
 
 - [x] Rename the reusable projects, namespaces, packages, tests, and API baselines.
 - [x] Prove no dependency on Marang, ASP.NET Core, or MCP.

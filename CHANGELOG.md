@@ -7,10 +7,22 @@ releases may still revise public contracts; every public API is tracked in
 
 ## Unreleased
 
+(nothing yet)
+
+## 0.1.0-preview.3
+
+Release prep cut; publishes to NuGet on tag push (`v0.1.0-preview.3`).
+Readiness verified 2026-09-30: Release build 0 warnings, format clean,
+coverage gates pass (abstractions 91.2/75.5, runtime 83.7/70.2, Codex
+90.8/84.2 line/branch vs 70/65/70 floors), all three packages pack with
+symbols, and an isolated file-local consumer drives a packed delegation
+Queued → Completed (including the new witness seam). Remaining release
+gates: independent design/security/API review, tag, push.
+
 - QH-08 prep (durable host seams, no new dependencies): new optional `durableHandleWitness` on `DelegationRuntime` (and the internal coordinator) receives every accepted handle capture — starts, early adapter captures, and resume rotations — before the coordinator observes provider results; a witness failure fails the start closed with zero observe calls and no duplicate starts (preview API change, baselines updated). Without a witness the runtime is unchanged and process-local only. See `docs/qh08-durable-host-handoff.md` for the host mapping table, sink-atomicity warning, crash matrix, and the upstream releases still blocking full QH-08.
 - Upstream durability audit (QH-07, docs-only): capability/version/evidence matrix and QH-08 entry gate in `docs/decisions/0018-qh07-upstream-durability-audit.md`. Published and usable: Zhinu `0.1.0-preview.14` signal/restart/artifact/lease primitives; Fuwen `0.1.0-preview.11` admission/lineage/gates; Hongxian `0.1.0-preview.4` session/outbox primitives. Still blocking durable integration: a Zhinu release with external-operation handles, parked waits, and generations; a Hongxian release with the reconciled projection read; Fuwen supervisor-node and FI-04/Hufu work in their owning projects. Corrects the stale ADR 0016 Siming dependency claim (core vendors its own pinned fingerprint envelope).
 
-- New `Penghou.Qingniao.Codex` package (not yet published): process-isolated
+- New `Penghou.Qingniao.Codex` package (first published in this preview): process-isolated
   `codex exec --json` execution adapter with approved workspaces, explicit
   sandbox, bounded output, early thread capture, and resume. Proven against
   recorded CLI transcripts and a 2026-09-26 live proof on codex-cli 0.157.0 (bounded execution plus interrupt/resume); repeatable protocol/recovery coverage remains open per QH-06.

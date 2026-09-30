@@ -157,7 +157,8 @@ and policy components. In-memory state does not survive restart; persisting one 
 
 Next milestones harden the Codex execution adapter (M3 live proof recorded 2026-09-26) and map the proven
 semantics to durable Zhinu execution. Packages are published as previews
-(`0.1.0-preview.2`); consumers should still treat the repository as
+(`0.1.0-preview.2` published; `0.1.0-preview.3` cut and publishing on tag
+push); consumers should still treat the repository as
 pre-release source.
 
 See:
