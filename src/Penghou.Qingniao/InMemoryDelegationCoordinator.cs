@@ -33,6 +33,7 @@ internal sealed class InMemoryDelegationCoordinator
     private readonly IProviderRegistry providerRegistry;
     private readonly InMemoryExternalOperationProviderCatalog adapterCatalog;
     private readonly InMemoryExternalOperationHandleCaptureRegistry handleRegistry;
+    private readonly IExternalOperationHandleCaptureSink providerCaptureSink;
     private readonly InMemoryDelegationExecutionStore executionStore;
     private readonly DelegationExecutionPublisher publisher;
     private readonly IExternalOperationSemanticFingerprintVerifier fingerprintVerifier;
@@ -63,7 +64,8 @@ internal sealed class InMemoryDelegationCoordinator
         IIndependentCandidateReviewer? candidateReviewer = null,
         ICandidateCorrector? candidateCorrector = null,
         ICandidateVerificationPolicy? verificationPolicy = null,
-        IDelegationInputMaterializer? inputMaterializer = null)
+        IDelegationInputMaterializer? inputMaterializer = null,
+        IExternalOperationHandleCaptureSink? durableHandleWitness = null)
     {
         this.acceptanceRegistry = acceptanceRegistry ?? throw new ArgumentNullException(nameof(acceptanceRegistry));
         this.admissionVerifier = admissionVerifier;
@@ -71,6 +73,9 @@ internal sealed class InMemoryDelegationCoordinator
         this.adapterCatalog = adapterCatalog ?? throw new ArgumentNullException(nameof(adapterCatalog));
         this.fingerprintVerifier = fingerprintVerifier ?? new LocalSemanticFingerprintVerifier();
         this.handleRegistry = handleRegistry ?? new InMemoryExternalOperationHandleCaptureRegistry();
+        this.providerCaptureSink = durableHandleWitness is null
+            ? this.handleRegistry
+            : new WitnessingHandleCaptureSink(this.handleRegistry, durableHandleWitness);
         this.executionStore = executionStore ?? new InMemoryDelegationExecutionStore();
         this.now = now ?? (() => DateTimeOffset.UtcNow);
         this.publisher = new DelegationExecutionPublisher(this.executionStore, this.now);
@@ -1144,7 +1149,7 @@ internal sealed class InMemoryDelegationCoordinator
                 receipt = await CallProviderOutsideGateAsync(
                     runtime,
                     providerToken => runtime.Adapter.StartAsync(
-                        runtime.StartRequest!, handleRegistry, providerToken)).ConfigureAwait(false);
+                        runtime.StartRequest!, providerCaptureSink, providerToken)).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -2180,7 +2185,7 @@ internal sealed class InMemoryDelegationCoordinator
         ExternalOperationStartReceipt receipt,
         CancellationToken cancellationToken)
     {
-        await handleRegistry.CaptureAsync(
+        await providerCaptureSink.CaptureAsync(
             new ExternalOperationHandleCapture(receipt.Handle, receipt.AcceptedAt),
             cancellationToken).ConfigureAwait(false);
     }
@@ -2354,8 +2359,29 @@ internal sealed class InMemoryDelegationCoordinator
         Complete,
     }
 
-    private sealed class ResumeHandleCaptureSink(
-        InMemoryDelegationCoordinator owner,
+    /// <summary>
+    /// Fans accepted handle captures out to the in-memory registry and one
+    /// host-owned durable witness, in that order. The registry stays the live
+    /// read authority; the witness is write-only evidence for host recovery and
+    /// must tolerate exact replays per the sink contract. A witness failure
+    /// propagates to the caller, which fails the start closed rather than
+    /// advancing to observation with an unpersisted handle.
+    /// </summary>
+    private sealed class WitnessingHandleCaptureSink(
+        InMemoryExternalOperationHandleCaptureRegistry registry,
+        IExternalOperationHandleCaptureSink witness) : IExternalOperationHandleCaptureSink
+    {
+        public async ValueTask CaptureAsync(
+            ExternalOperationHandleCapture capture,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(capture);
+            await registry.CaptureAsync(capture, cancellationToken).ConfigureAwait(false);
+            await witness.CaptureAsync(capture, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private sealed class ResumeHandleCaptureSink(InMemoryDelegationCoordinator owner,
         RuntimeState runtime,
         ExternalOperationHandle expectedHandle) : IExternalOperationHandleCaptureSink
     {
@@ -2386,6 +2412,7 @@ internal sealed class InMemoryDelegationCoordinator
 
         var rotated = runtime.Handle != capture.Handle;
         await handleRegistry.RotateAsync(expectedHandle, capture, cancellationToken).ConfigureAwait(false);
+        await providerCaptureSink.CaptureAsync(capture, cancellationToken).ConfigureAwait(false);
         runtime.Handle = capture.Handle;
         if (rotated)
         {

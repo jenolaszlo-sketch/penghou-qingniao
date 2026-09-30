@@ -30,6 +30,13 @@ public sealed class DelegationRuntime : IDelegationService
     /// required whenever candidate evaluators are configured. Without an input
     /// materializer, provider starts carry the legacy unmaterialized shape
     /// (empty inputs, no bounds, provider-name-derived agent record).
+    /// The optional durable handle witness receives every accepted handle
+    /// capture in order (starts, early adapter captures, and resume rotations,
+    /// including idempotent replays) before the coordinator observes provider
+    /// results. It must persist atomically and treat exact replays as
+    /// idempotent; a witness failure fails the start closed instead of
+    /// observing unpersisted work. Without a witness the runtime is
+    /// process-local only (see the retention model above).
     /// </summary>
     public DelegationRuntime(
         IDelegationAcceptanceRegistry acceptanceRegistry,
@@ -45,7 +52,8 @@ public sealed class DelegationRuntime : IDelegationService
         IIndependentCandidateReviewer? candidateReviewer = null,
         ICandidateCorrector? candidateCorrector = null,
         ICandidateVerificationPolicy? verificationPolicy = null,
-        IDelegationInputMaterializer? inputMaterializer = null) =>
+        IDelegationInputMaterializer? inputMaterializer = null,
+        IExternalOperationHandleCaptureSink? durableHandleWitness = null) =>
         coordinator = new InMemoryDelegationCoordinator(
             acceptanceRegistry,
             admissionVerifier,
@@ -62,7 +70,8 @@ public sealed class DelegationRuntime : IDelegationService
             candidateReviewer,
             candidateCorrector,
             verificationPolicy,
-            inputMaterializer);
+            inputMaterializer,
+            durableHandleWitness);
 
     /// <summary>Accepts a request and returns its delegation handle.</summary>
     public async Task<DelegationHandle> DelegateAsync(

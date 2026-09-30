@@ -48,7 +48,7 @@ QH-00–QH-10 below identify implementation packages.
 | QH-05 | **complete** (2026-09-28) | Record below; gate-free provider I/O with reserve/reconcile, intent-first cancel, observable deadlines; 409 core + 54 Codex pass; runtime 83.4%/69.9% coverage |
 | QH-06 | **complete** (2026-09-28) | Record below; verified completion requires `turn.completed`, frozen receipts, acknowledge-before-evict retention, usage parsing, protocol doc; 409 core + 63 Codex pass; Codex 90.5%/81.9% coverage |
 | QH-07 | **complete** (2026-09-30) | Upstream audit record below; capability/version/evidence matrix and QH-08 entry gate in ADR 0018; no code change |
-| QH-08 | not started | Blocked on QH-05/QH-06/QH-07 plus released upstream capabilities; do not launch unconditionally |
+| QH-08 | **prep complete (2026-09-30); implementation blocked** | Witness seam + fail-closed tests + handoff below; full integration waits on the ADR 0018 entry gate; do not launch unconditionally |
 | QH-09 | not started | Blocked on QH-06/QH-08 |
 | QH-10 | not started | Blocked on relevant prior packages; full dogfood needs M4/M5 |
 
@@ -564,4 +564,36 @@ entry gate, and non-code packed-consumer design are in
   --verify-no-changes` exit 0 (pre-existing workspace-load warnings only).
   Docs-only change; code untouched by this package.
 - Next eligible: QH-08 prep (fail-closed seams + blocked handoff) only; full
-  QH-08 after the entry gate. Do not publish packages from QH-07.
+QH-08 after the entry gate. Do not publish packages from QH-07.
+
+## QH-08 prep record — 2026-09-30
+
+Status: **prep complete; full QH-08 implementation remains blocked** on the
+ADR 0018 entry gate (Zhinu release with external-operation handles, parked
+waits, and generations; Hongxian release with the reconciled projection
+read). No workflow dependencies added to core; no new package references.
+
+- Changed: `src/Penghou.Qingniao/InMemoryDelegationCoordinator.cs` (optional
+  `durableHandleWitness` ctor sink; `WitnessingHandleCaptureSink` fan-out to
+  the live registry plus the witness, in that order; start, early-capture,
+  post-receipt, and resume-rotation captures all flow through it before any
+  observation); `src/Penghou.Qingniao/DelegationRuntime.cs` (optional public
+  `durableHandleWitness` parameter with retention-model docs); `PublicAPI.Unshipped.txt`
+  baseline; `tests/.../DurableHandleWitnessTests.cs` (new: witness-before-observe
+  ordering, throwing-witness fail-closed with zero observe/duplicate starts and
+  stable terminal replay, resume-rotation capture order); `docs/qh08-durable-host-handoff.md`
+  (new: mapping table, witness contract, sink-atomicity warning, host crash
+  matrix, upstream gates).
+- Behavior without a witness is byte-for-byte the previous behavior: the
+  fan-out collapses to the registry, all existing suites pass unmodified.
+- A witness failure after provider acceptance publishes terminal `Failed` and
+  drops the started handle (honest, unrecoverable inside Qingniao); the
+  handoff requires atomic/idempotent witness writes plus out-of-band orphan
+  reconciliation by the host.
+- Test evidence (Windows, .NET SDK 10.0.401): `dotnet build -c Release`
+  0 warnings; `dotnet test -c Release` 413 core + 69 Codex pass per framework
+  on net8/net10 (3 new witness tests included), 0 failures, 3 reported
+  privileged skips; `dotnet format --verify-no-changes` exit 0;
+  `git diff --check` clean.
+- Next: full QH-08 only after the entry gate. Do not publish packages from
+  this prep.
