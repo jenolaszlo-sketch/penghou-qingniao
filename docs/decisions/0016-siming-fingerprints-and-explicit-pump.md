@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted for the first Qingniao preview.
+Accepted for the first Qingniao preview. **Dependency claim superseded
+2026-09-30 by [ADR 0018](0018-qh07-upstream-durability-audit.md) (D2):**
+Qingniao core no longer depends on any Siming package; it vendors its own
+pinned `external-start-semantics-v1` fingerprint envelope
+(`LocalSemanticFingerprintVerifier`), and the boundary test suite forbids
+Siming types in core. The explicit-pump decisions below stand.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # Implementation and model handoff plan
 
-Date: 2026-09-28. Status: **QH-00–QH-06 complete; QH-07–QH-10 planned**.
+Date: 2026-09-28. Status: **QH-00–QH-07 complete; QH-08–QH-10 planned**.
 Inputs: [review](architecture-boundary-review-2026-09-28.md),
 [roadmap](roadmap.md), [dependency plan](dependency-release-plan.md),
 [ADR 0017](decisions/0017-optional-workflow-composition.md).
@@ -32,7 +32,8 @@ terminal results and lightweight direct use. Fuwen/Zhinu/Hongxian integrations
 remain outside core; ADR 0017 requires demonstrated reuse in Marang and Guyabano
 before creating optional Qingniao integration packages.
 
-QH-00 through QH-06 are **complete** (2026-09-28, see records below); QH-07–QH-10 remain **not started**. Review IDs Q01–Q09 identify findings;
+QH-00 through QH-07 are **complete** (QH-00–QH-06 on 2026-09-28, QH-07 audit on
+2026-09-30, see records below); QH-08–QH-10 remain **not started**. Review IDs Q01–Q09 identify findings;
 QH-00–QH-10 below identify implementation packages.
 
 ## Task status
@@ -46,7 +47,7 @@ QH-00–QH-10 below identify implementation packages.
 | QH-04 | **complete** (2026-09-28) | Record below; materialization seam, fingerprinted inputs, virgin-only replay, retention model; 404 core + 54 Codex pass; abstractions 91.2%/75.5%, runtime 83.3%/69.9% coverage |
 | QH-05 | **complete** (2026-09-28) | Record below; gate-free provider I/O with reserve/reconcile, intent-first cancel, observable deadlines; 409 core + 54 Codex pass; runtime 83.4%/69.9% coverage |
 | QH-06 | **complete** (2026-09-28) | Record below; verified completion requires `turn.completed`, frozen receipts, acknowledge-before-evict retention, usage parsing, protocol doc; 409 core + 63 Codex pass; Codex 90.5%/81.9% coverage |
-| QH-07 | not started | Eligible after QH-00; independent read-only audit lane |
+| QH-07 | **complete** (2026-09-30) | Upstream audit record below; capability/version/evidence matrix and QH-08 entry gate in ADR 0018; no code change |
 | QH-08 | not started | Blocked on QH-05/QH-06/QH-07 plus released upstream capabilities; do not launch unconditionally |
 | QH-09 | not started | Blocked on QH-06/QH-08 |
 | QH-10 | not started | Blocked on relevant prior packages; full dogfood needs M4/M5 |
@@ -398,7 +399,11 @@ owner/version blockers; next task IDs. Use planned, in progress, blocked on a
 named prerequisite, or complete. Preserve historical milestone completion while
 recording newly found regressions explicitly.
 
-QH-00–QH-06 are complete. Next assignments: **QH-07** (independent prerequisite audit) and QH-08 only after QH-05/QH-06/QH-07 plus verified released upstream capabilities. Do not launch QH-08 as
+QH-00–QH-07 are complete. Next assignments: **QH-08 only after a Zhinu
+release containing external-operation handle persistence, parked waits, and
+execution generations plus a Hongxian release containing the reconciled
+projection read** (entry gate in ADR 0018); until then, in-repo fail-closed
+seams and a precise blocked handoff only. Do not launch QH-08 as
 unconditional implementation work or reopen completed M3 feasibility wholesale.
 
 ## Validation commands
@@ -523,3 +528,40 @@ Status: **complete**. A second cross-layer review found and fixed one coordinato
 - Found **P2 (liveness), fixed**: the adapter's `WaitForThreadAsync` used `CancellationToken.None` and ignored `ExternalOperationStartRequest.Deadline`, so a child that never reports a thread identity and never exits parked the start forever. Fix: the adapter now bounds the start by the request deadline and fails closed as `codex.start-timeout` (killing the child). Added past-deadline and future-deadline regressions. `docs/codex-protocol-support.md` records the start deadline.
 - Evidence (Windows, .NET SDK 10.0.401): `dotnet build -c Release` 0 warnings; `dotnet test -c Release --no-build` 410 core + 67 Codex pass per framework, 3 reported skips; `dotnet format --verify-no-changes` exit 0; gates runtime 83.45% line / 70.01% branch, Codex 90.43% line / 82.36% branch.
 - Still tracked (not fixed): Codex results carry no artifacts/candidate so the adapter cannot drive the candidate/test/review lifecycle; stderr diagnostics are captured but not exposed; usage/exit/receipt provenance remain internal-only; `CodexExecOptions` constructor does filesystem I/O; `EnsureWorkspaceForLaunch` placement; `EvictCompleted` cost and non-hard capacity; god-class structure. Cross-layer reviews catch this class of seam bug, so repeat after each 2–3 packages.
+
+## QH-07 completion record — 2026-09-30
+
+Status: **complete**. Read-only upstream durability and package-independence
+audit; no Qingniao code changed. Full matrix, version pins, decisions, QH-08
+entry gate, and non-code packed-consumer design are in
+[ADR 0018](decisions/0018-qh07-upstream-durability-audit.md).
+
+- Method: NuGet index checks for published versions; Zhinu publish content
+  established by symbol-presence checks at the `preview.14` release commit
+  `98ad00d` (Zhinu has no tags/CHANGELOG); Fuwen by `git diff
+  v0.1.0-preview.11..HEAD`; Hongxian by `git diff v0.1.0-preview.4..HEAD`.
+- Pins: Zhinu `0.1.0-preview.14` (published; handle persistence, parked waits,
+  and generations are source-only); Fuwen `0.1.0-preview.11` (published;
+  admission, lineage, gates, context requirements, fingerprints, Zhinu port —
+  no supervisor node, no FI-04 grants, coordinated inference unreleased);
+  Hongxian `0.1.0-preview.4` (published; reconciled projection read is
+  post-tag); Siming `0.1.0-preview.7`, Baize `0.3.0-preview.6`, Cangjie
+  `0.1.0-preview.3`, Hetu `0.2.0-preview.6`.
+- Published and usable for QH-08 planning: Zhinu signal receipts/fenced
+  delivery/signal waits/selective restart (+receipts)/artifact fencing/leases/
+  terminal cancel; Fuwen admission/lineage/gates; Hongxian append + ExpectedHead,
+  projections, leases, store-local outbox reconciliation.
+- Blocking QH-08 implementation: a Zhinu release with external-operation
+  handles, parked waits, and generations; a Hongxian release with the
+  reconciled projection read; plus Fuwen supervisor-node, FI-04/Hufu, and
+  fenced-admin work in their owning projects.
+- Doc corrections made: ADR 0016's "depends on Siming preview.4" superseded
+  (core vendors its own pinned envelope; boundary test forbids Siming types);
+  dependency-plan Gate 1 repinned; Gate 3 records QH-04/QH-05 complete.
+- Test evidence (Windows, .NET SDK 10.0.401): `dotnet build -c Release` 0 warnings;
+  `dotnet test -c Release --no-build` 410 core + 69 Codex pass per framework on
+  net8/net10, 0 failures, 3 reported privileged skips; `dotnet format
+  --verify-no-changes` exit 0 (pre-existing workspace-load warnings only).
+  Docs-only change; code untouched by this package.
+- Next eligible: QH-08 prep (fail-closed seams + blocked handoff) only; full
+  QH-08 after the entry gate. Do not publish packages from QH-07.

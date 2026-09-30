@@ -29,12 +29,30 @@ MCP + real provider + durable Zhinu/Hongxian integration
 
 ## Gate 1 — Available primitive releases
 
-Status: **complete for the extraction and in-memory slice**
+Status: **re-audited 2026-09-30 (QH-07); see ADR 0018 for the full
+capability/version/evidence matrix**
 
 - Penghou.Zhinu `0.1.0-preview.12` is published.
 - Penghou.Hongxian `0.1.0-preview.2` is published.
 - Penghou.Siming `0.1.0-preview.4` is published and provides
   `penghou-canonical-json-v2` plus SHA-256 computation/verification.
+
+QH-07 pins (published, verified against the NuGet index plus release
+commits/tags): Zhinu `0.1.0-preview.14` (release commit `98ad00d`;
+signal receipts, fenced delivery, signal waits, selective restart with
+receipts, artifact fencing, leases, and terminal cancel are published —
+external-operation handle persistence, parked waits, and execution
+generations are source-only and need the next Zhinu release); Fuwen
+`0.1.0-preview.11` (admission, revision lineage, checkpoint/wait gates,
+typed context requirements, fingerprints, and the Zhinu port are published —
+no supervisor node, no FI-04 grants, coordinated inference unreleased);
+Hongxian `0.1.0-preview.4` (append with `ExpectedHead`, projections, leases,
+and store-local outbox reconciliation are published — the crash-healing
+reconciled projection read is post-tag and needs the next release). Siming
+`0.1.0-preview.7`, Baize `0.3.0-preview.6`, Cangjie `0.1.0-preview.3`, Hetu
+`0.2.0-preview.6` are published; Qingniao core takes no Siming package
+dependency (it vendors its own pinned fingerprint envelope; ADR 0016's
+dependency claim is superseded by ADR 0018).
 
 Fuwen's advanced-plan validation gate and Zhinu's remaining durable external-
 operation fencing work block only their later integrations; they do not block
@@ -79,7 +97,8 @@ Status: **complete for the M2.8 in-memory coordinator proof; durable integration
 - [x] Prove candidate sealing, deterministic Test, independent Review, bounded
   supervision, one repair generation, and terminal-result immutability.
 - Resolve atomic acceptance/state initialization, bounded retained state, and
-  immutable objective input as post-preview.2 hardening (QH-04/QH-05); the DelegationRuntime facade is already public and in-memory-only.
+  immutable objective input as post-preview.2 hardening (QH-04/QH-05 —
+  complete 2026-09-28); the DelegationRuntime facade is already public and in-memory-only.
 - Run API, XML, multi-target, package, and isolated-consumer verification.
 
 Marang and Guyabano exercise the package boundary before any stability graduation (first previews already published).

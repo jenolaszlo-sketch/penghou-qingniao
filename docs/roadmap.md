@@ -825,7 +825,9 @@ internal provider tournament, workflow optimizer or hidden routing fallback.
 The [implementation handoff plan](implementation-handoff-plan.md) turns the
 [boundary review](architecture-boundary-review-2026-09-28.md) into bounded
 assignments with dependencies, acceptance tests and model handoff instructions.
-Status: **QH-00 complete (baseline + wording, 2026-09-28); QH-01–QH-10 planned; no code implementation is marked complete by adding this plan**.
+Status: **QH-00–QH-07 complete (QH-07 audit 2026-09-30, matrix and QH-08 entry
+gate in [ADR 0018](decisions/0018-qh07-upstream-durability-audit.md));
+QH-08–QH-10 planned; no code implementation is marked complete by adding this plan**.
 
 | Work | Task IDs | Relationship to existing roadmap |
 | --- | --- | --- |
