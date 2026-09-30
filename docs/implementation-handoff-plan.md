@@ -59,7 +59,7 @@ QH-00–QH-10 below identify implementation packages.
 | Extraction / M0–M2 complete | QH-00; regressions throughout | Keep delivered behavior; reconcile stale status text |
 | Post-M2 public-surface gates | QH-04/QH-05 | Atomic acceptance/state, bounded retention, immutable objective and trusted protocol metadata |
 | M3 live Codex proof complete | QH-01/QH-02/QH-03/QH-06 | Harden the implemented adapter and preserve recorded proof |
-| M3 SDK/app-server comparison | Optional follow-up after QH-06 | Decision note based on measured gaps; not an automatic migration or M4 blocker |
+| M3 SDK/app-server comparison | Complete 2026-09-30 (ADR 0019) | Decision note: stay on CLI; not a migration or M4 blocker |
 | M4 durable execution | QH-07/QH-08 | Verified released upstream fencing plus host-layer implementation and crash tests |
 | M5 evidence/validation/repair | QH-06/QH-09 | Production evidence path over existing M2 semantics; do not reimplement completed fake proofs |
 | Gate 0.5 optional-code-stack independence | QH-07/QH-10 | Packed non-code consumer; session/recovery work without Hetu/code-analysis dependencies |

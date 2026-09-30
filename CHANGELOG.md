@@ -7,7 +7,13 @@ releases may still revise public contracts; every public API is tracked in
 
 ## Unreleased
 
-(nothing yet)
+- SDK/app-server comparison (M3 follow-up, docs-only): [ADR 0019](docs/decisions/0019-codex-appserver-comparison.md)
+  stays on `codex exec --json` — no official .NET SDK exists, the long-lived
+  server cuts against the disposable-process failure model, and in-turn
+  approvals have no demanding consumer. Revisit only on a concrete gap plus a
+  maintained .NET transport.
+
+(nothing else yet)
 
 ## 0.1.0-preview.3
 

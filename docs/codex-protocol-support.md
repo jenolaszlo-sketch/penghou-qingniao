@@ -90,8 +90,10 @@ materializer can do so).
   process (only the interrupt/resume turn was recorded).
 - Whether thread identity alone identifies the exact accepted turn across all
   supported flag combinations.
-- SDK/app-server comparison for cancellation, progress and approvals
-  (non-blocking M3 follow-up).
+- SDK/app-server comparison: decided 2026-09-30 in
+  [ADR 0019](decisions/0019-codex-appserver-comparison.md) — stay on
+  `exec --json`; revisit only on a concrete gap plus a maintained .NET
+  transport.
 
 A paid/account live run to characterize these is an explicitly scoped task and
 is not part of default unit/CI coverage.

@@ -548,8 +548,11 @@ Status: **live proof complete 2026-09-26 (codex-cli 0.157.0, ChatGPT account)**
 - [x] Fix stdin hang found by the live proof: `codex exec` blocks on
       redirected stdin, so the factory now closes stdin at spawn; without it
       no live run can start.
-- [ ] Compare the CLI spike with an SDK/app-server bridge for cancellation,
-      progress, approvals, and long-lived support.
+- [x] Compare the CLI spike with an SDK/app-server bridge for cancellation,
+  progress, approvals, and long-lived support. Decision recorded 2026-09-30
+  in [ADR 0019](decisions/0019-codex-appserver-comparison.md): stay on
+  `exec --json`; revisit only on a concrete gap plus a maintained .NET
+  transport. Non-blocking; not an M4 gate.
 - [x] Verify local authentication and subscription/API-key behavior without
       claiming unavailable cost precision (ChatGPT login verified; live runs
       succeed on quota; usage-limit failures classify as non-retryable
