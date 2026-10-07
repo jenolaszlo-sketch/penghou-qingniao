@@ -69,6 +69,10 @@ public readonly record struct DelegationRequestFingerprint
 /// capabilities, and the optional opaque admission fence. The caller scope and
 /// <see cref="DelegationRequest.RequestKey"/> are intentionally excluded from
 /// content fingerprints and are compared separately by acceptance.
+/// Requested-authority fields are likewise excluded: delegation identity stays
+/// stable across re-scoping, while authority intent is versioned by Hufu's
+/// derivation identity instead. Same delegation plus different requested
+/// authority therefore yields distinct derivations, never a conflict.
 /// </summary>
 public static class DelegationRequestIdentity
 {

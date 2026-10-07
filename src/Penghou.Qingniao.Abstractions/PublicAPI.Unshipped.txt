@@ -12,8 +12,25 @@ Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier.Compute(Penghou.Q
 Penghou.Qingniao.DelegationRequest.Provider.get -> string!
 Penghou.Qingniao.DelegationRequest.RequiredCapabilities.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityRequirement!>!
 Penghou.Qingniao.ProviderDescriptor.ProviderDescriptor(string! provider, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityDescriptor!>! capabilities, bool enabled = true, System.Collections.Generic.IReadOnlyList<string!>? models = null) -> void
-Penghou.Qingniao.DelegationRequest.DelegationRequest(string! requestKey, string! objective, string! provider, Penghou.Qingniao.WorkspaceReference! workspace, System.Collections.Generic.IReadOnlyList<string!>! acceptanceCriteria, System.Collections.Generic.IReadOnlyList<string!>! constraints, Penghou.Qingniao.DelegationBudget! budget, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityRequirement!>? requiredCapabilities = null, Penghou.Qingniao.DelegationAdmissionFence? admissionFence = null) -> void
+Penghou.Qingniao.DelegationRequest.DelegationRequest(string! requestKey, string! objective, string! provider, Penghou.Qingniao.WorkspaceReference! workspace, System.Collections.Generic.IReadOnlyList<string!>! acceptanceCriteria, System.Collections.Generic.IReadOnlyList<string!>! constraints, Penghou.Qingniao.DelegationBudget! budget, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.CapabilityRequirement!>? requiredCapabilities = null, Penghou.Qingniao.DelegationAdmissionFence? admissionFence = null, string? parentGrantId = null, Penghou.Qingniao.RequestedAuthority? requestedAuthority = null) -> void
 Penghou.Qingniao.DelegationRequest.AdmissionFence.get -> Penghou.Qingniao.DelegationAdmissionFence?
+Penghou.Qingniao.DelegationRequest.ParentGrantId.get -> string?
+Penghou.Qingniao.DelegationRequest.RequestedAuthority.get -> Penghou.Qingniao.RequestedAuthority?
+Penghou.Qingniao.RequestedAuthority
+Penghou.Qingniao.RequestedAuthority.RequestedAuthority(System.Collections.Generic.IReadOnlyList<string!>! actions, Penghou.Qingniao.RequestedAuthorityScope! scope, System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.RequestedAuthorityScope!>! exclusions, System.DateTimeOffset notBefore, System.DateTimeOffset expiresAt) -> void
+Penghou.Qingniao.RequestedAuthority.Actions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Penghou.Qingniao.RequestedAuthority.Scope.get -> Penghou.Qingniao.RequestedAuthorityScope!
+Penghou.Qingniao.RequestedAuthority.Exclusions.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.RequestedAuthorityScope!>!
+Penghou.Qingniao.RequestedAuthority.NotBefore.get -> System.DateTimeOffset
+Penghou.Qingniao.RequestedAuthority.ExpiresAt.get -> System.DateTimeOffset
+Penghou.Qingniao.RequestedAuthorityScope
+Penghou.Qingniao.RequestedAuthorityScope.RequestedAuthorityScope(string! workspaceId, string! relativePath, Penghou.Qingniao.RequestedAuthorityScopeKind kind) -> void
+Penghou.Qingniao.RequestedAuthorityScope.WorkspaceId.get -> string!
+Penghou.Qingniao.RequestedAuthorityScope.RelativePath.get -> string!
+Penghou.Qingniao.RequestedAuthorityScope.Kind.get -> Penghou.Qingniao.RequestedAuthorityScopeKind
+Penghou.Qingniao.RequestedAuthorityScopeKind
+Penghou.Qingniao.RequestedAuthorityScopeKind.Exact = 0 -> Penghou.Qingniao.RequestedAuthorityScopeKind
+Penghou.Qingniao.RequestedAuthorityScopeKind.Subtree = 1 -> Penghou.Qingniao.RequestedAuthorityScopeKind
 Penghou.Qingniao.DelegationAdmissionFence
 Penghou.Qingniao.DelegationAdmissionFence.DelegationAdmissionFence(string! kind, string! identifier, string! revision, string? fingerprint = null) -> void
 Penghou.Qingniao.DelegationAdmissionFence.Fingerprint.get -> string?

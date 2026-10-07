@@ -26,6 +26,16 @@ public static class DelegationRequestValidator
 
         request.AdmissionFence?.Validate();
 
+        if (request.ParentGrantId is not null)
+        {
+            RequireCanonicalIdentityText(request.ParentGrantId, nameof(request.ParentGrantId), 256);
+        }
+
+        if (request.RequestedAuthority is { } authority)
+        {
+            ValidateRequestedAuthority(authority);
+        }
+
         var totalTextLength = (long)request.RequestKey.Length + request.Objective.Length
             + request.Workspace.Provider.Length + request.Workspace.Identifier.Length
             + (request.Workspace.Revision?.Length ?? 0);
@@ -50,6 +60,52 @@ public static class DelegationRequestValidator
                 duration,
                 "Maximum duration must be positive when supplied.");
         }
+    }
+
+    /// <summary>
+    /// Validates requested-authority transport shape only: bounded labels,
+    /// well-formed scopes, and a non-empty validity interval. Canonical
+    /// authority semantics (normalization, containment, delegability) belong
+    /// to Hufu at derivation, never here.
+    /// </summary>
+    private static void ValidateRequestedAuthority(RequestedAuthority authority)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        if (authority.Actions.Count is < 1 or > 64)
+            throw new ArgumentException("One or more bounded action names are required.", nameof(authority));
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var action in authority.Actions)
+        {
+            RequireCanonicalIdentityText(action, nameof(authority), 128);
+            if (!seen.Add(action))
+                throw new ArgumentException("Action names must be distinct.", nameof(authority));
+        }
+
+        RequireCanonicalIdentityText(authority.Scope.WorkspaceId, nameof(authority), 256);
+        RequireAuthorityPath(authority.Scope.RelativePath, nameof(authority));
+        if (authority.Exclusions.Count > 128)
+            throw new ArgumentException("Too many exclusions.", nameof(authority));
+        foreach (var exclusion in authority.Exclusions)
+        {
+            ArgumentNullException.ThrowIfNull(exclusion, nameof(authority));
+            RequireCanonicalIdentityText(exclusion.WorkspaceId, nameof(authority), 256);
+            RequireAuthorityPath(exclusion.RelativePath, nameof(authority));
+            if (!Enum.IsDefined(exclusion.Kind))
+                throw new ArgumentOutOfRangeException(nameof(authority));
+        }
+
+        if (!Enum.IsDefined(authority.Scope.Kind))
+            throw new ArgumentOutOfRangeException(nameof(authority));
+        if (authority.NotBefore >= authority.ExpiresAt)
+            throw new ArgumentException("Requested validity must be a non-empty interval.", nameof(authority));
+    }
+
+    private static void RequireAuthorityPath(string? value, string parameterName)
+    {
+        if (value is null)
+            throw new ArgumentNullException(parameterName);
+        if (value.Length > 512 || value.Any(char.IsControl))
+            throw new ArgumentException("Authority paths are bounded text without control characters.", parameterName);
     }
 
     private static int ValidateTextList(

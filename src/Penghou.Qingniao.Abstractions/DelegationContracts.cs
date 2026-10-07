@@ -385,7 +385,9 @@ public sealed record DelegationRequest
         IReadOnlyList<string> constraints,
         DelegationBudget budget,
         IReadOnlyList<CapabilityRequirement>? requiredCapabilities = null,
-        DelegationAdmissionFence? admissionFence = null)
+        DelegationAdmissionFence? admissionFence = null,
+        string? parentGrantId = null,
+        RequestedAuthority? requestedAuthority = null)
     {
         RequestKey = requestKey;
         Objective = objective;
@@ -396,6 +398,10 @@ public sealed record DelegationRequest
         Budget = budget;
         RequiredCapabilities = SnapshotCapabilities(requiredCapabilities, nameof(requiredCapabilities));
         AdmissionFence = admissionFence;
+        if (parentGrantId is not null)
+            IdentityText.Require(parentGrantId, nameof(parentGrantId), 256);
+        ParentGrantId = parentGrantId;
+        RequestedAuthority = requestedAuthority;
     }
 
     /// <summary>
@@ -437,6 +443,19 @@ public sealed record DelegationRequest
     /// Empty means no capability requirement beyond registration and availability.
     /// </summary>
     public IReadOnlyList<CapabilityRequirement> RequiredCapabilities { get; }
+    /// <summary>
+    /// Gets the optional parent grant this delegation's authority derives from.
+    /// A label only: Qingniao never evaluates it. A host translates it, with
+    /// <see cref="RequestedAuthority"/>, into a Hufu derivation request.
+    /// </summary>
+    public string? ParentGrantId { get; }
+    /// <summary>
+    /// Gets the optional requested authority for this delegation. Desired
+    /// authority as data: Qingniao never checks containment, delegability,
+    /// or authorization against it. A host translates it into Hufu's
+    /// canonical requested-authority structure at the derivation seam.
+    /// </summary>
+    public RequestedAuthority? RequestedAuthority { get; }
 
     private static IReadOnlyList<CapabilityRequirement> SnapshotCapabilities(
         IReadOnlyList<CapabilityRequirement>? values,
