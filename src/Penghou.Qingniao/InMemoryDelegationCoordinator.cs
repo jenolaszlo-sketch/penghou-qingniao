@@ -45,6 +45,7 @@ internal sealed class InMemoryDelegationCoordinator
     private readonly ICandidateCorrector? candidateCorrector;
     private readonly ICandidateVerificationPolicy verificationPolicy;
     private readonly IDelegationInputMaterializer? inputMaterializer;
+    private readonly IDelegationAuthorityPreflight? authorityPreflight;
     private readonly CandidateEvaluationRunner evaluationRunner;
     private readonly Func<DateTimeOffset> now;
 
@@ -65,7 +66,8 @@ internal sealed class InMemoryDelegationCoordinator
         ICandidateCorrector? candidateCorrector = null,
         ICandidateVerificationPolicy? verificationPolicy = null,
         IDelegationInputMaterializer? inputMaterializer = null,
-        IExternalOperationHandleCaptureSink? durableHandleWitness = null)
+        IExternalOperationHandleCaptureSink? durableHandleWitness = null,
+        IDelegationAuthorityPreflight? authorityPreflight = null)
     {
         this.acceptanceRegistry = acceptanceRegistry ?? throw new ArgumentNullException(nameof(acceptanceRegistry));
         this.admissionVerifier = admissionVerifier;
@@ -96,6 +98,7 @@ internal sealed class InMemoryDelegationCoordinator
 
         this.verificationPolicy = verificationPolicy ?? FailClosedVerificationPolicy.Instance;
         this.inputMaterializer = inputMaterializer;
+        this.authorityPreflight = authorityPreflight;
         if (this.verificationPolicy.MaxVerificationRounds < 1)
         {
             throw new ArgumentOutOfRangeException(
@@ -249,12 +252,20 @@ internal sealed class InMemoryDelegationCoordinator
             materialized = inputMaterializer?.Materialize(request, acceptance.DelegationId);
         }
 
-        DateTimeOffset acceptedAt;
+        DelegationExecutionSnapshot? existing = null;
         try
         {
-            var existing = await executionStore.GetAsync(
+            existing = await executionStore.GetAsync(
                 acceptance.DelegationId,
                 cancellationToken).ConfigureAwait(false);
+        }
+        catch (DelegationExecutionNotFoundException)
+        {
+        }
+
+        DateTimeOffset acceptedAt;
+        if (existing is not null)
+        {
             if (existing.Progress.State != DelegationState.Queued || existing.Result is not null)
             {
                 throw new DelegationCoordinatorStateUnavailableException(acceptance.DelegationId);
@@ -262,13 +273,9 @@ internal sealed class InMemoryDelegationCoordinator
 
             acceptedAt = existing.Progress.UpdatedAt;
         }
-        catch (DelegationExecutionNotFoundException)
+        else
         {
             acceptedAt = RequireNow();
-            await executionStore.CreateAsync(
-                acceptance.DelegationId,
-                acceptedAt,
-                cancellationToken).ConfigureAwait(false);
         }
 
         var runtime = new RuntimeState(
@@ -281,12 +288,86 @@ internal sealed class InMemoryDelegationCoordinator
             acceptedAt,
             materialized);
 
+        // The authority start boundary: after DelegationId and Generation exist
+        // and before any durable startable record is committed. Invoked only for
+        // delegations that request derived authority and only when an adapter
+        // will actually start; a delegation with no request and no adapter keeps
+        // its existing behavior. A replayed record already carries its
+        // attachment; the preflight for the same generation is idempotent.
+        var executionAttachment = existing?.ExecutionAttachment;
+        if (adapter is not null
+            && (request.ParentGrantId is not null || request.RequestedAuthority is not null))
+        {
+            executionAttachment = await PreflightAuthorityAsync(runtime, request, cancellationToken).ConfigureAwait(false);
+        }
+
+        runtime.ExecutionAttachment = executionAttachment;
+        if (runtime.StartRequest is not null && executionAttachment is not null)
+        {
+            runtime.StartRequest = runtime.StartRequest with { ExecutionAttachment = executionAttachment };
+        }
+
+        if (existing is null)
+        {
+            await executionStore.CreateAsync(
+                acceptance.DelegationId,
+                acceptedAt,
+                executionAttachment,
+                cancellationToken).ConfigureAwait(false);
+        }
+
         lock (stateGate)
         {
             states.TryAdd(acceptance.DelegationId, runtime);
         }
 
         return acceptance;
+    }
+
+    /// <summary>
+    /// Runs the host authority preflight for one generation. Deny and
+    /// Unavailable both fail closed: the generation must not start, and neither
+    /// outcome degrades to parent authority, no authority, default admit, or
+    /// provider capability.
+    /// </summary>
+    private async ValueTask<DelegationExecutionAttachment> PreflightAuthorityAsync(
+        RuntimeState runtime,
+        DelegationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (authorityPreflight is null)
+        {
+            throw new DelegationAuthorityPreflightException(
+                DelegationAuthorityPreflightStatus.Unavailable,
+                "The delegation requests derived authority but no host authority preflight is configured.");
+        }
+
+        if (request.ParentGrantId is null || request.RequestedAuthority is null)
+        {
+            throw new DelegationAuthorityPreflightException(
+                DelegationAuthorityPreflightStatus.Deny,
+                "A derived-authority delegation requires both a parent grant and a requested authority.");
+        }
+
+        var context = new DelegationAuthorityPreflightContext(
+            runtime.DelegationId,
+            runtime.Generation,
+            request.ParentGrantId,
+            request.RequestedAuthority);
+
+        var decision = await authorityPreflight.PreflightAsync(context, cancellationToken).ConfigureAwait(false)
+            ?? throw new DelegationAuthorityPreflightException(
+                DelegationAuthorityPreflightStatus.Unavailable,
+                "The host authority preflight returned no decision.");
+
+        if (!decision.IsPermit)
+        {
+            throw new DelegationAuthorityPreflightException(
+                decision.Status,
+                decision.Reason ?? "The host authority preflight did not permit the generation.");
+        }
+
+        return decision.ExecutionAttachment!;
     }
 
     /// <summary>Reads the immutable observable execution snapshot.</summary>
@@ -2442,6 +2523,7 @@ internal sealed class InMemoryDelegationCoordinator
                 ? throw new ArgumentException("The accepted timestamp is required.", nameof(acceptedAt))
                 : acceptedAt;
             Phase = CoordinatorPhase.Start;
+            Generation = new NodeGenerationId(delegationId.Value);
 
             if (provider is not null)
             {
@@ -2468,7 +2550,7 @@ internal sealed class InMemoryDelegationCoordinator
                         delegationId.Value.ToString("N"),
                         "epoch-1"),
                     new StructuralNodeReference("delegation"),
-                    new NodeGenerationId(delegationId.Value),
+                    Generation,
                     "attempt-1",
                     agent);
                 var semanticInput = new ExternalOperationSemanticInputEnvelope(
@@ -2510,8 +2592,16 @@ internal sealed class InMemoryDelegationCoordinator
         internal SemaphoreSlim Gate { get; } = new(1, 1);
         internal CoordinatorPhase Phase { get; set; }
         internal ExternalOperationCorrelation Correlation { get; }
+        internal NodeGenerationId Generation { get; }
         internal ExternalOperationStartIdentity? StartIdentity { get; }
-        internal ExternalOperationStartRequest? StartRequest { get; }
+        internal ExternalOperationStartRequest? StartRequest { get; set; }
+
+        /// <summary>
+        /// Gets or sets the opaque host execution attachment for this
+        /// generation. Qingniao stores and re-presents it but never interprets
+        /// it; the host that produced its kind resolves it.
+        /// </summary>
+        internal DelegationExecutionAttachment? ExecutionAttachment { get; set; }
         internal ExternalOperationHandle? Handle { get; set; }
 
         /// <summary>

@@ -368,6 +368,16 @@ public sealed record ExternalOperationStartRequest
     public ExternalOperationSemanticInputEnvelope SemanticInput { get; }
 
     /// <summary>
+    /// Gets the optional opaque execution attachment recorded for this
+    /// generation, or <see langword="null"/> when the delegation acquired no
+    /// attachment. Qingniao carries and persists it but never interprets it;
+    /// it is deliberately excluded from <see cref="SemanticInput"/>, so it
+    /// does not change the semantic fingerprint. At most one attachment is
+    /// carried per external operation.
+    /// </summary>
+    public DelegationExecutionAttachment? ExecutionAttachment { get; init; }
+
+    /// <summary>
     /// Verifies the opaque semantic fingerprint through the verifier
     /// seam. Hosts must call this successfully before invoking StartAsync.
     /// </summary>

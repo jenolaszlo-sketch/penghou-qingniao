@@ -75,12 +75,16 @@ internal sealed class DelegationExecutionConflictException : InvalidOperationExc
 /// <summary>Immutable point-in-time state of one delegation execution.</summary>
 public sealed class DelegationExecutionSnapshot
 {
-    internal DelegationExecutionSnapshot(DelegationProgress progress, DelegationResult? result)
+    internal DelegationExecutionSnapshot(
+        DelegationProgress progress,
+        DelegationResult? result,
+        DelegationExecutionAttachment? executionAttachment = null)
     {
         ArgumentNullException.ThrowIfNull(progress);
         DelegationLifecycle.ValidateResultAvailability(progress, result);
         Progress = progress;
         Result = result;
+        ExecutionAttachment = executionAttachment;
     }
 
     /// <summary>Gets the observable execution progress.</summary>
@@ -88,6 +92,13 @@ public sealed class DelegationExecutionSnapshot
 
     /// <summary>Gets the terminal result, or <see langword="null"/> while the delegation is not terminal.</summary>
     public DelegationResult? Result { get; }
+
+    /// <summary>
+    /// Gets the opaque execution attachment recorded for this generation, or
+    /// <see langword="null"/> when the delegation acquired none. Persisted with
+    /// the generation and restored on replay; Qingniao never interprets it.
+    /// </summary>
+    public DelegationExecutionAttachment? ExecutionAttachment { get; }
 }
 
 /// <summary>
@@ -126,6 +137,18 @@ internal sealed class InMemoryDelegationExecutionStore
     internal ValueTask<DelegationExecutionSnapshot> CreateAsync(
         DelegationId delegationId,
         DateTimeOffset queuedAt,
+        CancellationToken cancellationToken = default) =>
+        CreateAsync(delegationId, queuedAt, null, cancellationToken);
+
+    /// <summary>
+    /// Creates an execution at revision zero in the Queued state, recording the
+    /// opaque execution attachment for this generation atomically with the
+    /// startable record.
+    /// </summary>
+    internal ValueTask<DelegationExecutionSnapshot> CreateAsync(
+        DelegationId delegationId,
+        DateTimeOffset queuedAt,
+        DelegationExecutionAttachment? executionAttachment,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -138,7 +161,7 @@ internal sealed class InMemoryDelegationExecutionStore
             workerCalls: 0,
             retries: 0,
             queuedAt);
-        return CreateAsync(queued, cancellationToken);
+        return CreateAsync(queued, executionAttachment, cancellationToken);
     }
 
     /// <summary>
@@ -147,6 +170,17 @@ internal sealed class InMemoryDelegationExecutionStore
     /// </summary>
     internal ValueTask<DelegationExecutionSnapshot> CreateAsync(
         DelegationProgress queued,
+        CancellationToken cancellationToken = default) =>
+        CreateAsync(queued, null, cancellationToken);
+
+    /// <summary>
+    /// Creates an execution from its required Queued revision-zero snapshot and
+    /// records the opaque execution attachment for this generation. Repeating
+    /// the exact initial snapshot and attachment is idempotent.
+    /// </summary>
+    internal ValueTask<DelegationExecutionSnapshot> CreateAsync(
+        DelegationProgress queued,
+        DelegationExecutionAttachment? executionAttachment,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -165,7 +199,9 @@ internal sealed class InMemoryDelegationExecutionStore
             cancellationToken.ThrowIfCancellationRequested();
             if (_entries.TryGetValue(queued.DelegationId, out var existing))
             {
-                if (ProgressEqual(existing.Progress, queued) && existing.Result is null)
+                if (ProgressEqual(existing.Progress, queued)
+                    && existing.Result is null
+                    && Equals(existing.ExecutionAttachment, executionAttachment))
                 {
                     return ValueTask.FromResult(existing);
                 }
@@ -182,7 +218,7 @@ internal sealed class InMemoryDelegationExecutionStore
                     $"A delegation execution store cannot contain more than {_maximumEntries} entries.");
             }
 
-            var snapshot = new DelegationExecutionSnapshot(queued, null);
+            var snapshot = new DelegationExecutionSnapshot(queued, null, executionAttachment);
             _entries.Add(queued.DelegationId, snapshot);
             return ValueTask.FromResult(snapshot);
         }
@@ -254,7 +290,7 @@ internal sealed class InMemoryDelegationExecutionStore
             }
 
             DelegationLifecycle.ValidateProgress(progress, existing.Progress);
-            var snapshot = new DelegationExecutionSnapshot(progress, null);
+            var snapshot = new DelegationExecutionSnapshot(progress, null, existing.ExecutionAttachment);
             _entries[delegationId] = snapshot;
             return ValueTask.FromResult(snapshot);
         }
@@ -323,7 +359,7 @@ internal sealed class InMemoryDelegationExecutionStore
             }
 
             DelegationLifecycle.ValidateProgress(progress, existing.Progress);
-            var snapshot = new DelegationExecutionSnapshot(progress, result);
+            var snapshot = new DelegationExecutionSnapshot(progress, result, existing.ExecutionAttachment);
             _entries[delegationId] = snapshot;
             return ValueTask.FromResult(snapshot);
         }

@@ -53,7 +53,8 @@ public sealed class DelegationRuntime : IDelegationService
         ICandidateCorrector? candidateCorrector = null,
         ICandidateVerificationPolicy? verificationPolicy = null,
         IDelegationInputMaterializer? inputMaterializer = null,
-        IExternalOperationHandleCaptureSink? durableHandleWitness = null) =>
+        IExternalOperationHandleCaptureSink? durableHandleWitness = null,
+        IDelegationAuthorityPreflight? authorityPreflight = null) =>
         coordinator = new InMemoryDelegationCoordinator(
             acceptanceRegistry,
             admissionVerifier,
@@ -71,7 +72,8 @@ public sealed class DelegationRuntime : IDelegationService
             candidateCorrector,
             verificationPolicy,
             inputMaterializer,
-            durableHandleWitness);
+            durableHandleWitness,
+            authorityPreflight);
 
     /// <summary>Accepts a request and returns its delegation handle.</summary>
     public async Task<DelegationHandle> DelegateAsync(

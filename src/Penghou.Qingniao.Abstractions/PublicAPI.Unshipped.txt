@@ -56,3 +56,9 @@ Penghou.Qingniao.MaterializedDelegationInputs.Agent.get -> Penghou.Qingniao.Exte
 Penghou.Qingniao.MaterializedDelegationInputs.Budget.get -> Penghou.Qingniao.ExternalOperationBudgetHint?
 Penghou.Qingniao.MaterializedDelegationInputs.Deadline.get -> System.DateTimeOffset?
 Penghou.Qingniao.MaterializedDelegationInputs.InputArtifacts.get -> System.Collections.Generic.IReadOnlyList<Penghou.Qingniao.DelegationArtifactReference!>!
+Penghou.Qingniao.DelegationExecutionAttachment
+Penghou.Qingniao.DelegationExecutionAttachment.DelegationExecutionAttachment(string! kind, string! value) -> void
+Penghou.Qingniao.DelegationExecutionAttachment.Kind.get -> string!
+Penghou.Qingniao.DelegationExecutionAttachment.Value.get -> string!
+Penghou.Qingniao.ExternalOperationStartRequest.ExecutionAttachment.get -> Penghou.Qingniao.DelegationExecutionAttachment?
+Penghou.Qingniao.ExternalOperationStartRequest.ExecutionAttachment.init -> void

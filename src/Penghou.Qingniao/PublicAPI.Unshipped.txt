@@ -118,7 +118,7 @@ Penghou.Qingniao.CandidateVerificationInput.WorkerCallsConsumed.init -> void
 Penghou.Qingniao.CandidateVerificationInput.MaximumWorkerCalls.get -> int
 Penghou.Qingniao.CandidateVerificationInput.MaximumWorkerCalls.init -> void
 Penghou.Qingniao.DelegationRuntime
-Penghou.Qingniao.DelegationRuntime.DelegationRuntime(Penghou.Qingniao.IDelegationAcceptanceRegistry! acceptanceRegistry, Penghou.Qingniao.IDelegationAdmissionVerifier? admissionVerifier, Penghou.Qingniao.IProviderRegistry! providerRegistry, Penghou.Qingniao.InMemoryExternalOperationProviderCatalog! adapterCatalog, Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier? fingerprintVerifier = null, System.Func<System.DateTimeOffset>? now = null, Penghou.Qingniao.ISupervisorContextProvider? contextProvider = null, Penghou.Qingniao.ISupervisorInterventionAcceptanceRegistry? interventionRegistry = null, Penghou.Qingniao.ICandidateRevisionPublicationRegistry? candidateRegistry = null, Penghou.Qingniao.IDeterministicCandidateValidator? candidateValidator = null, Penghou.Qingniao.IIndependentCandidateReviewer? candidateReviewer = null, Penghou.Qingniao.ICandidateCorrector? candidateCorrector = null, Penghou.Qingniao.ICandidateVerificationPolicy? verificationPolicy = null, Penghou.Qingniao.IDelegationInputMaterializer? inputMaterializer = null, Penghou.Qingniao.IExternalOperationHandleCaptureSink? durableHandleWitness = null) -> void
+Penghou.Qingniao.DelegationRuntime.DelegationRuntime(Penghou.Qingniao.IDelegationAcceptanceRegistry! acceptanceRegistry, Penghou.Qingniao.IDelegationAdmissionVerifier? admissionVerifier, Penghou.Qingniao.IProviderRegistry! providerRegistry, Penghou.Qingniao.InMemoryExternalOperationProviderCatalog! adapterCatalog, Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier? fingerprintVerifier = null, System.Func<System.DateTimeOffset>? now = null, Penghou.Qingniao.ISupervisorContextProvider? contextProvider = null, Penghou.Qingniao.ISupervisorInterventionAcceptanceRegistry? interventionRegistry = null, Penghou.Qingniao.ICandidateRevisionPublicationRegistry? candidateRegistry = null, Penghou.Qingniao.IDeterministicCandidateValidator? candidateValidator = null, Penghou.Qingniao.IIndependentCandidateReviewer? candidateReviewer = null, Penghou.Qingniao.ICandidateCorrector? candidateCorrector = null, Penghou.Qingniao.ICandidateVerificationPolicy? verificationPolicy = null, Penghou.Qingniao.IDelegationInputMaterializer? inputMaterializer = null, Penghou.Qingniao.IExternalOperationHandleCaptureSink? durableHandleWitness = null, Penghou.Qingniao.IDelegationAuthorityPreflight? authorityPreflight = null) -> void
 Penghou.Qingniao.DelegationRuntime.DelegateAsync(Penghou.Qingniao.DelegationCallerScope! caller, Penghou.Qingniao.DelegationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationHandle!>!
 Penghou.Qingniao.DelegationRuntime.GetStatusAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationProgress?>!
 Penghou.Qingniao.DelegationRuntime.GetResultAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationResult?>!
@@ -223,3 +223,29 @@ Penghou.Qingniao.ICandidateValidator
 Penghou.Qingniao.IIndependentCandidateReviewer
 Penghou.Qingniao.IIndependentCandidateReviewer.ReviewAsync(Penghou.Qingniao.CandidateReviewRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ReviewEvidence!>
 Penghou.Qingniao.ICandidateReviewer
+Penghou.Qingniao.DelegationAuthorityPreflightStatus
+Penghou.Qingniao.DelegationAuthorityPreflightStatus.Permit = 0 -> Penghou.Qingniao.DelegationAuthorityPreflightStatus
+Penghou.Qingniao.DelegationAuthorityPreflightStatus.Deny = 1 -> Penghou.Qingniao.DelegationAuthorityPreflightStatus
+Penghou.Qingniao.DelegationAuthorityPreflightStatus.Unavailable = 2 -> Penghou.Qingniao.DelegationAuthorityPreflightStatus
+Penghou.Qingniao.DelegationAuthorityPreflightContext
+Penghou.Qingniao.DelegationAuthorityPreflightContext.DelegationAuthorityPreflightContext(Penghou.Qingniao.DelegationId delegationId, Penghou.Qingniao.NodeGenerationId generation, string! parentGrantId, Penghou.Qingniao.RequestedAuthority! requestedAuthority, Penghou.Qingniao.SupervisorIdentity? supervisor = null) -> void
+Penghou.Qingniao.DelegationAuthorityPreflightContext.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.DelegationAuthorityPreflightContext.Generation.get -> Penghou.Qingniao.NodeGenerationId
+Penghou.Qingniao.DelegationAuthorityPreflightContext.ParentGrantId.get -> string!
+Penghou.Qingniao.DelegationAuthorityPreflightContext.RequestedAuthority.get -> Penghou.Qingniao.RequestedAuthority!
+Penghou.Qingniao.DelegationAuthorityPreflightContext.Supervisor.get -> Penghou.Qingniao.SupervisorIdentity?
+Penghou.Qingniao.DelegationAuthorityPreflightDecision
+Penghou.Qingniao.DelegationAuthorityPreflightDecision.ExecutionAttachment.get -> Penghou.Qingniao.DelegationExecutionAttachment?
+Penghou.Qingniao.DelegationAuthorityPreflightDecision.IsPermit.get -> bool
+Penghou.Qingniao.DelegationAuthorityPreflightDecision.Reason.get -> string?
+Penghou.Qingniao.DelegationAuthorityPreflightDecision.Status.get -> Penghou.Qingniao.DelegationAuthorityPreflightStatus
+static Penghou.Qingniao.DelegationAuthorityPreflightDecision.Permit(Penghou.Qingniao.DelegationExecutionAttachment! executionAttachment) -> Penghou.Qingniao.DelegationAuthorityPreflightDecision!
+static Penghou.Qingniao.DelegationAuthorityPreflightDecision.Deny(string! reason) -> Penghou.Qingniao.DelegationAuthorityPreflightDecision!
+static Penghou.Qingniao.DelegationAuthorityPreflightDecision.Unavailable(string! reason) -> Penghou.Qingniao.DelegationAuthorityPreflightDecision!
+Penghou.Qingniao.IDelegationAuthorityPreflight
+Penghou.Qingniao.IDelegationAuthorityPreflight.PreflightAsync(Penghou.Qingniao.DelegationAuthorityPreflightContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationAuthorityPreflightDecision!>
+Penghou.Qingniao.DelegationAuthorityPreflightException
+Penghou.Qingniao.DelegationAuthorityPreflightException.DelegationAuthorityPreflightException(Penghou.Qingniao.DelegationAuthorityPreflightStatus status, string! reason) -> void
+Penghou.Qingniao.DelegationAuthorityPreflightException.Reason.get -> string!
+Penghou.Qingniao.DelegationAuthorityPreflightException.Status.get -> Penghou.Qingniao.DelegationAuthorityPreflightStatus
+Penghou.Qingniao.DelegationExecutionSnapshot.ExecutionAttachment.get -> Penghou.Qingniao.DelegationExecutionAttachment?
