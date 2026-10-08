@@ -15,6 +15,21 @@ releases may still revise public contracts; every public API is tracked in
 
 (nothing else yet)
 
+## 0.1.0-preview.4
+
+- New `Penghou.Qingniao.Hufu` package (first published in this preview): Hufu-backed
+  `IDelegationAuthorityPreflight` host adapter. Strict boring Qingniao-to-Hufu
+  requested-authority mapping that fails closed as `Deny` (unknown actions,
+  non-contained exclusions, and malformed envelopes never reach the store);
+  exact Hufu-to-Qingniao status preservation (`Deny` stays `Deny`,
+  `Unavailable` stays `Unavailable`); `Permit` returns one opaque
+  `DelegationExecutionAttachment` (`Kind = penghou.hufu.authority-context`)
+  carrying only the encoded child execution context. No adapter grant cache —
+  same-generation retries converge through Hufu derivation idempotency.
+  `Penghou.Qingniao`, `Penghou.Qingniao.Abstractions`, and
+  `Penghou.Qingniao.Codex` are unchanged from `0.1.0-preview.3` (republished
+  for lockstep versioning).
+
 ## 0.1.0-preview.3
 
 Release prep cut; publishes to NuGet on tag push (`v0.1.0-preview.3`).

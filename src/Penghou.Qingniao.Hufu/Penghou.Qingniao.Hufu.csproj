@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <PackageId>Penghou.Qingniao.Hufu</PackageId>
+    <Title>Penghou Qingniao Hufu</Title>
+    <Description>Hufu-backed derived-authority preflight for Penghou Qingniao delegations: strict requested-authority mapping, status-preserving derivation, and an opaque execution attachment.</Description>
+    <PackageTags>delegation;authority;hufu;preflight;penghou;qingniao</PackageTags>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" PrivateAssets="all" />
+    <PackageReference Include="Penghou.Hufu" Version="0.1.0-preview.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Penghou.Qingniao.Abstractions\Penghou.Qingniao.Abstractions.csproj" />
+    <ProjectReference Include="..\Penghou.Qingniao\Penghou.Qingniao.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Penghou.Qingniao.Hufu.Tests" />
+  </ItemGroup>
+
+</Project>

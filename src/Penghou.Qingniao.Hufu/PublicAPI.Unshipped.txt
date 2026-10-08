@@ -1,0 +1,9 @@
+#nullable enable
+Penghou.Qingniao.Hufu.HufuDelegationAuthorityPreflight
+Penghou.Qingniao.Hufu.HufuDelegationAuthorityPreflight.HufuDelegationAuthorityPreflight(Penghou.Hufu.IAuthorityDerivationStore! store, Penghou.Hufu.AuthorityStoreActor! actor, Penghou.Hufu.AuthenticatedAuthorityContext! parentContext, System.Func<string!, string!, Penghou.Hufu.AuthenticatedAuthorityContext!>! childContextFactory) -> void
+Penghou.Qingniao.Hufu.HufuDelegationAuthorityPreflight.PreflightAsync(Penghou.Qingniao.DelegationAuthorityPreflightContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.DelegationAuthorityPreflightDecision!>
+Penghou.Qingniao.Hufu.HufuExecutionAttachment
+const Penghou.Qingniao.Hufu.HufuExecutionAttachment.Kind = "penghou.hufu.authority-context" -> string!
+static Penghou.Qingniao.Hufu.HufuExecutionAttachment.Encode(Penghou.Hufu.AuthenticatedAuthorityContext! context) -> string!
+static Penghou.Qingniao.Hufu.HufuExecutionAttachment.Decode(string! value) -> Penghou.Hufu.AuthenticatedAuthorityContext!
+static Penghou.Qingniao.Hufu.HufuExecutionAttachment.TryResolve(Penghou.Qingniao.DelegationExecutionAttachment? attachment, out Penghou.Hufu.AuthenticatedAuthorityContext? context) -> bool
