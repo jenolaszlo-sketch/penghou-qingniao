@@ -249,3 +249,37 @@ Penghou.Qingniao.DelegationAuthorityPreflightException.DelegationAuthorityPrefli
 Penghou.Qingniao.DelegationAuthorityPreflightException.Reason.get -> string!
 Penghou.Qingniao.DelegationAuthorityPreflightException.Status.get -> Penghou.Qingniao.DelegationAuthorityPreflightStatus
 Penghou.Qingniao.DelegationExecutionSnapshot.ExecutionAttachment.get -> Penghou.Qingniao.DelegationExecutionAttachment?
+Penghou.Qingniao.ExternalOperationRecoveryState
+Penghou.Qingniao.ExternalOperationRecoveryState.StartIntent = 0 -> Penghou.Qingniao.ExternalOperationRecoveryState
+Penghou.Qingniao.ExternalOperationRecoveryState.UnknownAfterRecovery = 1 -> Penghou.Qingniao.ExternalOperationRecoveryState
+Penghou.Qingniao.ExternalOperationRecoveryState.KnownObservable = 2 -> Penghou.Qingniao.ExternalOperationRecoveryState
+Penghou.Qingniao.ExternalOperationRecoveryState.KnownNotReconnectable = 3 -> Penghou.Qingniao.ExternalOperationRecoveryState
+Penghou.Qingniao.ExternalOperationRecoveryState.Completed = 4 -> Penghou.Qingniao.ExternalOperationRecoveryState
+Penghou.Qingniao.ExternalOperationRecoveryIntent
+Penghou.Qingniao.ExternalOperationRecoveryIntent.ExternalOperationRecoveryIntent(Penghou.Qingniao.ExternalOperationStartRequest! request, System.DateTimeOffset createdAt) -> void
+Penghou.Qingniao.ExternalOperationRecoveryIntent.Request.get -> Penghou.Qingniao.ExternalOperationStartRequest!
+Penghou.Qingniao.ExternalOperationRecoveryIntent.CreatedAt.get -> System.DateTimeOffset
+Penghou.Qingniao.ExternalOperationRecoveryRecord
+Penghou.Qingniao.ExternalOperationRecoveryRecord.ExternalOperationRecoveryRecord(Penghou.Qingniao.ExternalOperationRecoveryIntent! intent, Penghou.Qingniao.ExternalOperationHandleCapture? capture = null, Penghou.Qingniao.ExternalOperationObservation? observation = null, Penghou.Qingniao.ExternalOperationResult? result = null, Penghou.Qingniao.ExternalOperationRecoveryState recoveryState = Penghou.Qingniao.ExternalOperationRecoveryState.StartIntent) -> void
+Penghou.Qingniao.ExternalOperationRecoveryRecord.Intent.get -> Penghou.Qingniao.ExternalOperationRecoveryIntent!
+Penghou.Qingniao.ExternalOperationRecoveryRecord.Capture.get -> Penghou.Qingniao.ExternalOperationHandleCapture?
+Penghou.Qingniao.ExternalOperationRecoveryRecord.Observation.get -> Penghou.Qingniao.ExternalOperationObservation?
+Penghou.Qingniao.ExternalOperationRecoveryRecord.Result.get -> Penghou.Qingniao.ExternalOperationResult?
+Penghou.Qingniao.ExternalOperationRecoveryRecord.RecoveryState.get -> Penghou.Qingniao.ExternalOperationRecoveryState
+Penghou.Qingniao.IExternalOperationRecoveryJournal
+Penghou.Qingniao.IExternalOperationRecoveryJournal.TryCreateIntentAsync(Penghou.Qingniao.ExternalOperationRecoveryIntent! intent, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Penghou.Qingniao.IExternalOperationRecoveryJournal.ReadAsync(Penghou.Qingniao.ExternalOperationStartIdentity! identity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationRecoveryRecord?>
+Penghou.Qingniao.IExternalOperationRecoveryJournal.CaptureAsync(Penghou.Qingniao.ExternalOperationStartIdentity! identity, Penghou.Qingniao.ExternalOperationHandleCapture! capture, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.IExternalOperationRecoveryJournal.RecordObservationAsync(Penghou.Qingniao.ExternalOperationStartIdentity! identity, Penghou.Qingniao.ExternalOperationObservation! observation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.IExternalOperationRecoveryJournal.RecordResultAsync(Penghou.Qingniao.ExternalOperationStartIdentity! identity, Penghou.Qingniao.ExternalOperationResult! result, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.IExternalOperationRecoveryJournal.MarkKnownNotReconnectableAsync(Penghou.Qingniao.ExternalOperationStartIdentity! identity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Penghou.Qingniao.ExternalOperationRecoveryException
+Penghou.Qingniao.ExternalOperationRecoveryException.ExternalOperationRecoveryException(Penghou.Qingniao.ExternalOperationRecoveryState state) -> void
+Penghou.Qingniao.ExternalOperationRecoveryException.State.get -> Penghou.Qingniao.ExternalOperationRecoveryState
+Penghou.Qingniao.DurableExternalOperationProvider
+Penghou.Qingniao.DurableExternalOperationProvider.DurableExternalOperationProvider(Penghou.Qingniao.IExternalOperationProvider! inner, Penghou.Qingniao.IExternalOperationRecoveryJournal! journal, Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier! fingerprintVerifier, bool supportsRecoveryObservation = true, System.Func<System.DateTimeOffset>? now = null) -> void
+Penghou.Qingniao.DurableExternalOperationProvider.StartAsync(Penghou.Qingniao.ExternalOperationStartRequest! request, Penghou.Qingniao.IExternalOperationHandleCaptureSink! handleSink, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationStartReceipt!>
+Penghou.Qingniao.DurableExternalOperationProvider.ObserveAsync(Penghou.Qingniao.ExternalOperationHandle! handle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationObservation!>
+Penghou.Qingniao.DurableExternalOperationProvider.GetResultAsync(Penghou.Qingniao.ExternalOperationHandle! handle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationResult!>
+Penghou.Qingniao.DurableExternalOperationProvider.CancelAsync(Penghou.Qingniao.ExternalOperationCancelRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationCancellationReceipt!>
+Penghou.Qingniao.DurableExternalOperationProvider.ResumeAsync(Penghou.Qingniao.ExternalOperationResumeRequest! request, Penghou.Qingniao.IExternalOperationHandleCaptureSink! handleSink, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ExternalOperationResumeReceipt!>
