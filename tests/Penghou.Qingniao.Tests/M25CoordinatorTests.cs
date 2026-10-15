@@ -216,7 +216,7 @@ public sealed class M25CoordinatorTests
             new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            adapters,
+            adapters, TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             captures,
             now: now ?? (() => Start),

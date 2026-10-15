@@ -183,7 +183,7 @@ public sealed class DelegationAuthorityPreflightTests
             providers,
             adapters,
             now: () => Start,
-            authorityPreflight: authorityPreflight);
+            authorityPreflight: authorityPreflight, startAuthorizer: TestProviderStartAuthorizer.AllowAll());
     }
 
     private sealed class RecordingPreflight(DelegationAuthorityPreflightDecision decision) : IDelegationAuthorityPreflight

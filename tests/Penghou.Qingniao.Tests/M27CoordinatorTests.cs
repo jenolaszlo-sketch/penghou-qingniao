@@ -244,7 +244,7 @@ public sealed class M27CoordinatorTests
             new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            adapters,
+            adapters, TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             now: () => Start,
             candidateValidator: validator,

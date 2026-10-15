@@ -44,6 +44,7 @@ internal sealed class InMemoryDelegationCoordinator
     private readonly IIndependentCandidateReviewer? candidateReviewer;
     private readonly ICandidateCorrector? candidateCorrector;
     private readonly ICandidateVerificationPolicy verificationPolicy;
+    private readonly IProviderStartAuthorizer startAuthorizer;
     private readonly IDelegationInputMaterializer? inputMaterializer;
     private readonly IDelegationAuthorityPreflight? authorityPreflight;
     private readonly CandidateEvaluationRunner evaluationRunner;
@@ -54,6 +55,7 @@ internal sealed class InMemoryDelegationCoordinator
         IDelegationAdmissionVerifier? admissionVerifier,
         IProviderRegistry providerRegistry,
         InMemoryExternalOperationProviderCatalog adapterCatalog,
+        IProviderStartAuthorizer startAuthorizer,
         IExternalOperationSemanticFingerprintVerifier? fingerprintVerifier = null,
         InMemoryExternalOperationHandleCaptureRegistry? handleRegistry = null,
         InMemoryDelegationExecutionStore? executionStore = null,
@@ -73,6 +75,7 @@ internal sealed class InMemoryDelegationCoordinator
         this.admissionVerifier = admissionVerifier;
         this.providerRegistry = providerRegistry ?? throw new ArgumentNullException(nameof(providerRegistry));
         this.adapterCatalog = adapterCatalog ?? throw new ArgumentNullException(nameof(adapterCatalog));
+        this.startAuthorizer = startAuthorizer ?? throw new ArgumentNullException(nameof(startAuthorizer));
         this.fingerprintVerifier = fingerprintVerifier ?? new LocalSemanticFingerprintVerifier();
         this.handleRegistry = handleRegistry ?? new InMemoryExternalOperationHandleCaptureRegistry();
         this.providerCaptureSink = durableHandleWitness is null
@@ -1113,6 +1116,78 @@ internal sealed class InMemoryDelegationCoordinator
         return null;
     }
 
+    /// <summary>
+    /// Evaluates the mandatory provider-start gate for one pump attempt.
+    /// Returns null when the start may proceed; otherwise returns the snapshot
+    /// to publish (terminal denial) or the unchanged current snapshot
+    /// (unavailable: retry on a later pump). Never starts a provider on any
+    /// path but an explicit permit.
+    /// </summary>
+    private async ValueTask<DelegationExecutionSnapshot?> AuthorizeProviderStartAsync(
+        RuntimeState runtime,
+        DelegationExecutionSnapshot current,
+        CancellationToken cancellationToken)
+    {
+        var context = new ProviderStartAuthorizationContext(
+            runtime.DelegationId,
+            runtime.Request.Workspace.Identifier,
+            runtime.Request.Provider,
+            current.Progress.Revision);
+        ProviderStartAuthorizationOutcome outcome;
+        try
+        {
+            if (!context.Valid)
+            {
+                outcome = new ProviderStartAuthorizationOutcome(
+                    ProviderStartAuthorizationStatus.Denied, "qingniao.start-context-invalid");
+            }
+            else
+            {
+                outcome = await startAuthorizer.AuthorizeAsync(context, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // A throwing gate is indistinguishable from an unreachable one:
+            // fail closed and retryable, never a start.
+            return current;
+        }
+
+        // A null outcome is a malformed gate response: it is not a permit.
+        // Only an explicit permit proceeds; anything else stays closed.
+        if (outcome is null)
+        {
+            return current;
+        }
+
+        if (outcome.Status == ProviderStartAuthorizationStatus.Permitted)
+        {
+            return null;
+        }
+
+        if (outcome.Status == ProviderStartAuthorizationStatus.Denied)
+        {
+            runtime.Phase = CoordinatorPhase.Complete;
+            return await publisher.PublishTerminalAsync(
+                runtime,
+                current,
+                DelegationState.AuthorityDenied,
+                "Current authority denies provider start"
+                    + (string.IsNullOrWhiteSpace(outcome.ReasonCode) ? "." : $": {outcome.ReasonCode}.")
+                    + " No provider side effect occurred.",
+                [],
+                cancellationToken,
+                unresolvedConcerns: ["Current authority denies provider start; no provider side effect occurred."])
+                .ConfigureAwait(false);
+        }
+
+        return current;
+    }
+
     private async ValueTask<DelegationExecutionSnapshot> PumpStartAsync(
         RuntimeState runtime,
         DelegationExecutionSnapshot current,
@@ -1167,6 +1242,20 @@ internal sealed class InMemoryDelegationCoordinator
             // launching duplicate work; duration already ran above so bounds
             // stay observable through the stalled call.
             return current;
+        }
+
+        // Mandatory per-attempt start authority: evaluated immediately before
+        // any start-related mutation, against current authority. Denial is a
+        // terminal, explicit outcome with zero provider side effects.
+        // Unavailability performs nothing and stays in Start so a later pump
+        // re-evaluates; narrowing is respected, widening can then proceed.
+        // Denial wins over a pending cancellation: the explicit authority
+        // outcome must stay visible, never disguised as a cancel.
+        var startAuthorization = await AuthorizeProviderStartAsync(runtime, current, cancellationToken)
+            .ConfigureAwait(false);
+        if (startAuthorization is not null)
+        {
+            return startAuthorization;
         }
 
         if (current.Progress.State == DelegationState.Queued)

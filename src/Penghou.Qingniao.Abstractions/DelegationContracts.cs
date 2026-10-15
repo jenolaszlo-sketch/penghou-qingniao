@@ -229,6 +229,13 @@ public enum DelegationState
     /// Identifies the WaitingForSupervisor enum value.
     /// </summary>
     WaitingForSupervisor = 7,
+    /// <summary>
+    /// Identifies the AuthorityDenied enum value: current authority denied a
+    /// runtime effect (for example provider start). Terminal: no protected
+    /// effect occurred. A new attempt requires a new evaluation, never the
+    /// old decision.
+    /// </summary>
+    AuthorityDenied = 8,
 }
 
 /// <summary>

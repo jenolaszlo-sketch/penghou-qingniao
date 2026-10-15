@@ -152,7 +152,7 @@ public sealed class InMemoryDelegationCoordinatorTests
             acceptanceRegistry,
             null,
             providers,
-            adapters,
+            adapters, TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             captures,
             now: () => Start);
@@ -350,7 +350,7 @@ public sealed class InMemoryDelegationCoordinatorTests
             acceptanceRegistry ?? new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            adapters,
+            adapters, TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             captures,
             now: now ?? (() => Start));

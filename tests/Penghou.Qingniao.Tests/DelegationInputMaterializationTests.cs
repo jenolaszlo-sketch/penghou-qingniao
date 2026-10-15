@@ -251,7 +251,7 @@ public sealed class DelegationInputMaterializationTests
             acceptanceRegistry ?? new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            adapters,
+            adapters, TestProviderStartAuthorizer.AllowAll(),
             fingerprintVerifier ?? new LocalSemanticFingerprintVerifier(),
             new InMemoryExternalOperationHandleCaptureRegistry(),
             executionStore,

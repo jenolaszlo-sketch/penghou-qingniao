@@ -7,3 +7,8 @@ const Penghou.Qingniao.Hufu.HufuExecutionAttachment.Kind = "penghou.hufu.authori
 static Penghou.Qingniao.Hufu.HufuExecutionAttachment.Encode(Penghou.Hufu.AuthenticatedAuthorityContext! context) -> string!
 static Penghou.Qingniao.Hufu.HufuExecutionAttachment.Decode(string! value) -> Penghou.Hufu.AuthenticatedAuthorityContext!
 static Penghou.Qingniao.Hufu.HufuExecutionAttachment.TryResolve(Penghou.Qingniao.DelegationExecutionAttachment? attachment, out Penghou.Hufu.AuthenticatedAuthorityContext? context) -> bool
+Penghou.Qingniao.Hufu.HufuProviderStartAuthorizer
+const Penghou.Qingniao.Hufu.HufuProviderStartAuthorizer.Revision = "g0" -> string!
+const Penghou.Qingniao.Hufu.HufuProviderStartAuthorizer.Fence = "provider-start" -> string!
+Penghou.Qingniao.Hufu.HufuProviderStartAuthorizer.HufuProviderStartAuthorizer(Penghou.Hufu.IAuthorityRequestAuthorizer! authority, string! tenantId, System.Func<Penghou.Qingniao.DelegationId, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<(string! SubjectId, string! WorkspaceId)?>>! resolveBinding) -> void
+Penghou.Qingniao.Hufu.HufuProviderStartAuthorizer.AuthorizeAsync(Penghou.Qingniao.ProviderStartAuthorizationContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ProviderStartAuthorizationOutcome!>

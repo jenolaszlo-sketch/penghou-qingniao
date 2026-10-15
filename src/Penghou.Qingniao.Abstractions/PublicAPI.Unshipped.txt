@@ -62,3 +62,4 @@ Penghou.Qingniao.DelegationExecutionAttachment.Kind.get -> string!
 Penghou.Qingniao.DelegationExecutionAttachment.Value.get -> string!
 Penghou.Qingniao.ExternalOperationStartRequest.ExecutionAttachment.get -> Penghou.Qingniao.DelegationExecutionAttachment?
 Penghou.Qingniao.ExternalOperationStartRequest.ExecutionAttachment.init -> void
+Penghou.Qingniao.DelegationState.AuthorityDenied = 8 -> Penghou.Qingniao.DelegationState

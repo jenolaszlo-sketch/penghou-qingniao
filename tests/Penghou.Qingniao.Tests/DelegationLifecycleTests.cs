@@ -63,6 +63,7 @@ public sealed class DelegationLifecycleTests
     [InlineData(DelegationState.Failed)]
     [InlineData(DelegationState.Cancelled)]
     [InlineData(DelegationState.BudgetExceeded)]
+    [InlineData(DelegationState.AuthorityDenied)]
     [InlineData(DelegationState.NeedsSupervisor)]
     public void Terminal_states_are_explicit_including_needs_supervisor(DelegationState state)
     {
@@ -553,12 +554,14 @@ public sealed class DelegationLifecycleTests
             (DelegationState.Queued, DelegationState.BudgetExceeded) => true,
             (DelegationState.Queued, DelegationState.NeedsSupervisor) => true,
             (DelegationState.Queued, DelegationState.WaitingForSupervisor) => true,
+            (DelegationState.Queued, DelegationState.AuthorityDenied) => true,
             (DelegationState.Running, DelegationState.Completed) => true,
             (DelegationState.Running, DelegationState.Failed) => true,
             (DelegationState.Running, DelegationState.Cancelled) => true,
             (DelegationState.Running, DelegationState.BudgetExceeded) => true,
             (DelegationState.Running, DelegationState.NeedsSupervisor) => true,
             (DelegationState.Running, DelegationState.WaitingForSupervisor) => true,
+            (DelegationState.Running, DelegationState.AuthorityDenied) => true,
             (DelegationState.WaitingForSupervisor, DelegationState.Running) => true,
             (DelegationState.WaitingForSupervisor, DelegationState.Failed) => true,
             (DelegationState.WaitingForSupervisor, DelegationState.Cancelled) => true,

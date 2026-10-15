@@ -122,7 +122,7 @@ public sealed class DurableHandleWitnessTests
             providers,
             adapters,
             now: () => Start,
-            durableHandleWitness: witness);
+            durableHandleWitness: witness, startAuthorizer: TestProviderStartAuthorizer.AllowAll());
     }
 
     private sealed class RecordingWitness(Func<int> observeCalls) : IExternalOperationHandleCaptureSink

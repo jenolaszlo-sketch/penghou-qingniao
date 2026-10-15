@@ -118,7 +118,7 @@ Penghou.Qingniao.CandidateVerificationInput.WorkerCallsConsumed.init -> void
 Penghou.Qingniao.CandidateVerificationInput.MaximumWorkerCalls.get -> int
 Penghou.Qingniao.CandidateVerificationInput.MaximumWorkerCalls.init -> void
 Penghou.Qingniao.DelegationRuntime
-Penghou.Qingniao.DelegationRuntime.DelegationRuntime(Penghou.Qingniao.IDelegationAcceptanceRegistry! acceptanceRegistry, Penghou.Qingniao.IDelegationAdmissionVerifier? admissionVerifier, Penghou.Qingniao.IProviderRegistry! providerRegistry, Penghou.Qingniao.InMemoryExternalOperationProviderCatalog! adapterCatalog, Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier? fingerprintVerifier = null, System.Func<System.DateTimeOffset>? now = null, Penghou.Qingniao.ISupervisorContextProvider? contextProvider = null, Penghou.Qingniao.ISupervisorInterventionAcceptanceRegistry? interventionRegistry = null, Penghou.Qingniao.ICandidateRevisionPublicationRegistry? candidateRegistry = null, Penghou.Qingniao.IDeterministicCandidateValidator? candidateValidator = null, Penghou.Qingniao.IIndependentCandidateReviewer? candidateReviewer = null, Penghou.Qingniao.ICandidateCorrector? candidateCorrector = null, Penghou.Qingniao.ICandidateVerificationPolicy? verificationPolicy = null, Penghou.Qingniao.IDelegationInputMaterializer? inputMaterializer = null, Penghou.Qingniao.IExternalOperationHandleCaptureSink? durableHandleWitness = null, Penghou.Qingniao.IDelegationAuthorityPreflight? authorityPreflight = null) -> void
+Penghou.Qingniao.DelegationRuntime.DelegationRuntime(Penghou.Qingniao.IDelegationAcceptanceRegistry! acceptanceRegistry, Penghou.Qingniao.IDelegationAdmissionVerifier? admissionVerifier, Penghou.Qingniao.IProviderRegistry! providerRegistry, Penghou.Qingniao.InMemoryExternalOperationProviderCatalog! adapterCatalog, Penghou.Qingniao.IProviderStartAuthorizer! startAuthorizer, Penghou.Qingniao.IExternalOperationSemanticFingerprintVerifier? fingerprintVerifier = null, System.Func<System.DateTimeOffset>? now = null, Penghou.Qingniao.ISupervisorContextProvider? contextProvider = null, Penghou.Qingniao.ISupervisorInterventionAcceptanceRegistry? interventionRegistry = null, Penghou.Qingniao.ICandidateRevisionPublicationRegistry? candidateRegistry = null, Penghou.Qingniao.IDeterministicCandidateValidator? candidateValidator = null, Penghou.Qingniao.IIndependentCandidateReviewer? candidateReviewer = null, Penghou.Qingniao.ICandidateCorrector? candidateCorrector = null, Penghou.Qingniao.ICandidateVerificationPolicy? verificationPolicy = null, Penghou.Qingniao.IDelegationInputMaterializer? inputMaterializer = null, Penghou.Qingniao.IExternalOperationHandleCaptureSink? durableHandleWitness = null, Penghou.Qingniao.IDelegationAuthorityPreflight? authorityPreflight = null) -> void
 Penghou.Qingniao.DelegationRuntime.DelegateAsync(Penghou.Qingniao.DelegationCallerScope! caller, Penghou.Qingniao.DelegationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationHandle!>!
 Penghou.Qingniao.DelegationRuntime.GetStatusAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationProgress?>!
 Penghou.Qingniao.DelegationRuntime.GetResultAsync(Penghou.Qingniao.DelegationId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Penghou.Qingniao.DelegationResult?>!
@@ -249,3 +249,31 @@ Penghou.Qingniao.DelegationAuthorityPreflightException.DelegationAuthorityPrefli
 Penghou.Qingniao.DelegationAuthorityPreflightException.Reason.get -> string!
 Penghou.Qingniao.DelegationAuthorityPreflightException.Status.get -> Penghou.Qingniao.DelegationAuthorityPreflightStatus
 Penghou.Qingniao.DelegationExecutionSnapshot.ExecutionAttachment.get -> Penghou.Qingniao.DelegationExecutionAttachment?
+Penghou.Qingniao.ProviderStartAuthorizationStatus
+Penghou.Qingniao.ProviderStartAuthorizationStatus.Permitted = 0 -> Penghou.Qingniao.ProviderStartAuthorizationStatus
+Penghou.Qingniao.ProviderStartAuthorizationStatus.Denied = 1 -> Penghou.Qingniao.ProviderStartAuthorizationStatus
+Penghou.Qingniao.ProviderStartAuthorizationStatus.Unavailable = 2 -> Penghou.Qingniao.ProviderStartAuthorizationStatus
+Penghou.Qingniao.ProviderStartAuthorizationContext
+Penghou.Qingniao.ProviderStartAuthorizationContext.ProviderStartAuthorizationContext(Penghou.Qingniao.DelegationId DelegationId, string! Workspace, string! Provider, long Revision) -> void
+Penghou.Qingniao.ProviderStartAuthorizationContext.DelegationId.get -> Penghou.Qingniao.DelegationId
+Penghou.Qingniao.ProviderStartAuthorizationContext.Workspace.get -> string!
+Penghou.Qingniao.ProviderStartAuthorizationContext.Provider.get -> string!
+Penghou.Qingniao.ProviderStartAuthorizationContext.Revision.get -> long
+Penghou.Qingniao.ProviderStartAuthorizationContext.Valid.get -> bool
+Penghou.Qingniao.ProviderStartAuthorizationOutcome
+Penghou.Qingniao.ProviderStartAuthorizationOutcome.ProviderStartAuthorizationOutcome(Penghou.Qingniao.ProviderStartAuthorizationStatus Status, string! ReasonCode, string? EvidenceId = null) -> void
+Penghou.Qingniao.ProviderStartAuthorizationOutcome.Status.get -> Penghou.Qingniao.ProviderStartAuthorizationStatus
+Penghou.Qingniao.ProviderStartAuthorizationOutcome.ReasonCode.get -> string!
+Penghou.Qingniao.ProviderStartAuthorizationOutcome.EvidenceId.get -> string?
+Penghou.Qingniao.IProviderStartAuthorizer
+Penghou.Qingniao.IProviderStartAuthorizer.AuthorizeAsync(Penghou.Qingniao.ProviderStartAuthorizationContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ProviderStartAuthorizationOutcome!>
+Penghou.Qingniao.FailClosedProviderStartAuthorizer
+static Penghou.Qingniao.FailClosedProviderStartAuthorizer.Instance.get -> Penghou.Qingniao.FailClosedProviderStartAuthorizer!
+Penghou.Qingniao.FailClosedProviderStartAuthorizer.AuthorizeAsync(Penghou.Qingniao.ProviderStartAuthorizationContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Penghou.Qingniao.ProviderStartAuthorizationOutcome!>
+Penghou.Qingniao.ProviderStartAuthorizationContext.DelegationId.init -> void
+Penghou.Qingniao.ProviderStartAuthorizationContext.Workspace.init -> void
+Penghou.Qingniao.ProviderStartAuthorizationContext.Provider.init -> void
+Penghou.Qingniao.ProviderStartAuthorizationContext.Revision.init -> void
+Penghou.Qingniao.ProviderStartAuthorizationOutcome.Status.init -> void
+Penghou.Qingniao.ProviderStartAuthorizationOutcome.ReasonCode.init -> void
+Penghou.Qingniao.ProviderStartAuthorizationOutcome.EvidenceId.init -> void

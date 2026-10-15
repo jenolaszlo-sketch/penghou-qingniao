@@ -212,7 +212,7 @@ public sealed class ProviderStallTests
             new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            adapters,
+            adapters, TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             new InMemoryExternalOperationHandleCaptureRegistry(),
             null,

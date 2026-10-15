@@ -225,7 +225,7 @@ public sealed class M26CoordinatorTests
             new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            new InMemoryExternalOperationProviderCatalog(),
+            new InMemoryExternalOperationProviderCatalog(), TestProviderStartAuthorizer.AllowAll(),
             now: () => Start,
             candidateValidator: new FixedValidator("passed"));
 
@@ -259,7 +259,7 @@ public sealed class M26CoordinatorTests
             new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            adapters,
+            adapters, TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             captures,
             now: () => Start,

@@ -134,7 +134,7 @@ public sealed class DelegationRuntimeTests
             verifier,
             providers,
             adapters,
-            now: () => Start);
+            now: () => Start, startAuthorizer: TestProviderStartAuthorizer.AllowAll());
     }
 
     private sealed class RejectingAdmissionVerifier(

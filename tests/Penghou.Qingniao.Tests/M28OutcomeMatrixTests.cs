@@ -168,7 +168,7 @@ public sealed class M28OutcomeMatrixTests
             new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            new InMemoryExternalOperationProviderCatalog(),
+            new InMemoryExternalOperationProviderCatalog(), TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             now: () => Start);
         var accepted = await coordinator.AcceptAsync(Caller(), Request("missing-adapter", provider: "m28-missing"));
@@ -221,7 +221,7 @@ public sealed class M28OutcomeMatrixTests
             new InMemoryDelegationAcceptanceRegistry(),
             null,
             registry,
-            catalog,
+            catalog, TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             now: () => Start), provider);
     }

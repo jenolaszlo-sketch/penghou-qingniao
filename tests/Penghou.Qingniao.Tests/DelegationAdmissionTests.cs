@@ -96,7 +96,7 @@ public sealed class DelegationAdmissionTests
             new InMemoryDelegationAcceptanceRegistry(),
             verifier,
             providers,
-            new InMemoryExternalOperationProviderCatalog(),
+            new InMemoryExternalOperationProviderCatalog(), TestProviderStartAuthorizer.AllowAll(),
             now: () => DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
     }
 

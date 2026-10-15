@@ -447,7 +447,7 @@ public sealed class M24CoordinatorTests
             new InMemoryDelegationAcceptanceRegistry(),
             null,
             providers,
-            adapters,
+            adapters, TestProviderStartAuthorizer.AllowAll(),
             new LocalSemanticFingerprintVerifier(),
             captures,
             now: () => Start), captures);
