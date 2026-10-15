@@ -48,7 +48,7 @@ public sealed class ProviderStartAuthorizationTests
     }
 
     [Fact]
-    public async Task Unavailable_start_performs_nothing_and_reevaluates_on_retry()
+    public async Task Unavailable_start_terminates_explicitly_without_start()
     {
         var provider = new RecordingProvider();
         var gate = new SwitchableGate(ProviderStartAuthorizationStatus.Unavailable);
@@ -56,32 +56,15 @@ public sealed class ProviderStartAuthorizationTests
         var ct = TestContext.Current.CancellationToken;
         var handle = await runtime.DelegateAsync(new DelegationCallerScope("caller"), CreateRequest("flaky"), ct);
 
-        var first = await PumpOnceAsync(runtime, handle.DelegationId, ct);
-        first.Progress.State.Should().Be(DelegationState.Queued);
-        provider.StartRequests.Should().BeEmpty();
-
-        // Authority narrows before the retry: the next pump re-evaluates.
-        gate.Status = ProviderStartAuthorizationStatus.Denied;
         var terminal = await PumpToTerminalAsync(runtime, handle.DelegationId, ct);
+
+        // Unavailability terminates explicitly rather than parking in Start:
+        // a stuck Start would be ambiguous with "not yet pumped", and local
+        // store unavailability is effectively permanent. Recovery is a new
+        // explicit attempt, never an automatic retry on stale state.
         terminal.Progress.State.Should().Be(DelegationState.AuthorityDenied);
         provider.StartRequests.Should().BeEmpty();
-        gate.Contexts.Should().HaveCountGreaterThan(1);
-    }
-
-    [Fact]
-    public async Task Unavailable_then_permitted_starts_on_retry()
-    {
-        var provider = new RecordingProvider();
-        var gate = new SwitchableGate(ProviderStartAuthorizationStatus.Unavailable);
-        var runtime = CreateRuntime(provider, gate);
-        var ct = TestContext.Current.CancellationToken;
-        var handle = await runtime.DelegateAsync(new DelegationCallerScope("caller"), CreateRequest("recover"), ct);
-
-        await PumpOnceAsync(runtime, handle.DelegationId, ct);
-        gate.Status = ProviderStartAuthorizationStatus.Permitted;
-        await PumpToTerminalAsync(runtime, handle.DelegationId, ct);
-
-        provider.StartRequests.Should().ContainSingle();
+        gate.Contexts.Should().ContainSingle();
     }
 
     [Fact]
@@ -92,9 +75,9 @@ public sealed class ProviderStartAuthorizationTests
         var ct = TestContext.Current.CancellationToken;
         var handle = await runtime.DelegateAsync(new DelegationCallerScope("caller"), CreateRequest("throw"), ct);
 
-        var snapshot = await PumpOnceAsync(runtime, handle.DelegationId, ct);
+        var terminal = await PumpToTerminalAsync(runtime, handle.DelegationId, ct);
 
-        snapshot.Progress.State.Should().Be(DelegationState.Queued);
+        terminal.Progress.State.Should().Be(DelegationState.AuthorityDenied);
         provider.StartRequests.Should().BeEmpty();
     }
 
@@ -106,9 +89,9 @@ public sealed class ProviderStartAuthorizationTests
         var ct = TestContext.Current.CancellationToken;
         var handle = await runtime.DelegateAsync(new DelegationCallerScope("caller"), CreateRequest("null"), ct);
 
-        var snapshot = await PumpOnceAsync(runtime, handle.DelegationId, ct);
+        var terminal = await PumpToTerminalAsync(runtime, handle.DelegationId, ct);
 
-        snapshot.Progress.State.Should().Be(DelegationState.Queued);
+        terminal.Progress.State.Should().Be(DelegationState.AuthorityDenied);
         provider.StartRequests.Should().BeEmpty();
     }
 
@@ -136,13 +119,6 @@ public sealed class ProviderStartAuthorizationTests
             adapters,
             gate,
             now: () => Start);
-    }
-
-    private static async Task<DelegationExecutionSnapshot> PumpOnceAsync(
-        DelegationRuntime runtime, DelegationId id, CancellationToken ct)
-    {
-        var snapshot = await runtime.GetAsync(id, ct);
-        return await runtime.PumpAsync(id, snapshot.Progress.Revision, ct);
     }
 
     private static async Task<DelegationExecutionSnapshot> PumpToTerminalAsync(

@@ -1152,40 +1152,37 @@ internal sealed class InMemoryDelegationCoordinator
         }
         catch
         {
-            // A throwing gate is indistinguishable from an unreachable one:
-            // fail closed and retryable, never a start.
-            return current;
+            // A throwing gate is indistinguishable from an unreachable one.
+            outcome = new ProviderStartAuthorizationOutcome(
+                ProviderStartAuthorizationStatus.Unavailable, "qingniao.start-gate-error");
         }
 
         // A null outcome is a malformed gate response: it is not a permit.
-        // Only an explicit permit proceeds; anything else stays closed.
-        if (outcome is null)
-        {
-            return current;
-        }
-
-        if (outcome.Status == ProviderStartAuthorizationStatus.Permitted)
-        {
-            return null;
-        }
-
-        if (outcome.Status == ProviderStartAuthorizationStatus.Denied)
+        // Only an explicit permit proceeds; anything else terminates
+        // explicitly as AuthorityDenied with its reason and zero provider
+        // side effects. A stuck Start would be ambiguous with "not yet
+        // pumped", while terminal denial is observable and diagnosing. For
+        // the local authority stores in scope, unavailability is effectively
+        // permanent, so parking would never heal. Denial wins over a pending
+        // cancellation: the explicit authority outcome must stay visible,
+        // never disguised as a cancel.
+        if (outcome is null || outcome.Status != ProviderStartAuthorizationStatus.Permitted)
         {
             runtime.Phase = CoordinatorPhase.Complete;
             return await publisher.PublishTerminalAsync(
                 runtime,
                 current,
                 DelegationState.AuthorityDenied,
-                "Current authority denies provider start"
-                    + (string.IsNullOrWhiteSpace(outcome.ReasonCode) ? "." : $": {outcome.ReasonCode}.")
+                "Current authority does not permit provider start"
+                    + (string.IsNullOrWhiteSpace(outcome?.ReasonCode) ? "." : $": {outcome.ReasonCode}.")
                     + " No provider side effect occurred.",
                 [],
                 cancellationToken,
-                unresolvedConcerns: ["Current authority denies provider start; no provider side effect occurred."])
+                unresolvedConcerns: ["Current authority does not permit provider start; no provider side effect occurred."])
                 .ConfigureAwait(false);
         }
 
-        return current;
+        return null;
     }
 
     private async ValueTask<DelegationExecutionSnapshot> PumpStartAsync(
@@ -1245,12 +1242,10 @@ internal sealed class InMemoryDelegationCoordinator
         }
 
         // Mandatory per-attempt start authority: evaluated immediately before
-        // any start-related mutation, against current authority. Denial is a
-        // terminal, explicit outcome with zero provider side effects.
-        // Unavailability performs nothing and stays in Start so a later pump
-        // re-evaluates; narrowing is respected, widening can then proceed.
-        // Denial wins over a pending cancellation: the explicit authority
-        // outcome must stay visible, never disguised as a cancel.
+        // any start-related mutation, against current authority. Anything but
+        // an explicit permit terminates explicitly as AuthorityDenied with its
+        // reason and zero provider side effects: a stuck Start would be
+        // ambiguous with "not yet pumped".
         var startAuthorization = await AuthorizeProviderStartAsync(runtime, current, cancellationToken)
             .ConfigureAwait(false);
         if (startAuthorization is not null)
