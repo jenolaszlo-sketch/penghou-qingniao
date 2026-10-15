@@ -18,7 +18,8 @@ var runtime = new DelegationRuntime(
     new InMemoryDelegationAcceptanceRegistry(),
     admissionVerifier: null,
     providers,
-    adapters);
+    adapters,
+    startAuthorizer: new SampleStartAuthorizer());
 
 var caller = new DelegationCallerScope("sample-caller");
 var request = new DelegationRequest(
@@ -107,4 +108,18 @@ internal sealed class SampleProvider : IExternalOperationProvider
         ExternalOperationResumeRequest request,
         IExternalOperationHandleCaptureSink handleSink,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+}
+
+/// <summary>
+/// Sample-only permitting start authorizer so the walkthrough can execute.
+/// NOT production code and not a pattern to copy: production hosts compose a
+/// real current-authority gate (for example Hufu-backed). A missing gate fails
+/// closed; this explicit permit exists only to keep the sample runnable.
+/// </summary>
+internal sealed class SampleStartAuthorizer : IProviderStartAuthorizer
+{
+    public ValueTask<ProviderStartAuthorizationOutcome> AuthorizeAsync(
+        ProviderStartAuthorizationContext context, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(new ProviderStartAuthorizationOutcome(
+            ProviderStartAuthorizationStatus.Permitted, "sample.permitted"));
 }
